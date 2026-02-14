@@ -1,12 +1,33 @@
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from agentic_system.orchestrator.graph import Orchestrator
-from agentic_system.config.settings import get_settings
 
-app = FastAPI(title="Agentic System API")
+from agentic_system.config.settings import get_settings
+from agentic_system.orchestrator.graph import Orchestrator
+
+app = FastAPI(title="Agentic System API", docs_url=None, redoc_url=None)
+router = APIRouter(prefix="/api")
 orchestrator = Orchestrator()
 settings = get_settings()
+
+
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    return RedirectResponse(url="/api/docs")
+
+
+@router.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+        swagger_ui_parameters={"theme": "dark"},
+    )
 
 
 class InvokeRequest(BaseModel):
@@ -22,12 +43,12 @@ class EnhanceSkillRequest(BaseModel):
     description: str
 
 
-@app.get("/health")
+@router.get("/health")
 def health_check():
     return {"status": "ok"}
 
 
-@app.post("/invoke", response_model=InvokeResponse)
+@router.post("/invoke", response_model=InvokeResponse)
 async def invoke_agent(request: InvokeRequest):
     try:
         result = orchestrator.invoke(request.prompt)
@@ -36,7 +57,7 @@ async def invoke_agent(request: InvokeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/enhance-skill", response_model=InvokeResponse)
+@router.post("/enhance-skill", response_model=InvokeResponse)
 async def enhance_skill(request: EnhanceSkillRequest):
     try:
         # Explicitly target the skill_enhancer agent with both title and description
@@ -47,7 +68,7 @@ async def enhance_skill(request: EnhanceSkillRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/get-models")
+@router.get("/get-models")
 def get_models():
     """Fetches available models from the configured provider."""
     if settings.llm_provider == "gemini":
@@ -66,3 +87,6 @@ def get_models():
         )
 
     return response.json()
+
+
+app.include_router(router)

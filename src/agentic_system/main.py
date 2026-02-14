@@ -4,7 +4,7 @@ import argparse
 import os
 
 from agentic_system.agents.registry import AgentRegistry
-from agentic_system.tools.registry import ToolRegistry
+from agentic_system.agents.tool_registry import ToolRegistry
 
 
 def _configure_langsmith() -> None:

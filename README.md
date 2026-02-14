@@ -47,7 +47,7 @@ agentic --show-graph mermaid --save-graph graph.mmd
   - `AgentRegistry` class + `AgentSpec`
 - `src/agentic_system/tools/registry.py`
   - `ToolRegistry` class + `ToolSpec` + tool groups
-- `src/agentic_system/tools/http_api.py`
+- `src/agentic_system/tools/web/http_get.py`
   - reusable HTTP API tool adapter (URL-ready)
 
 ## 5) Add a new tool (standard way)
@@ -62,7 +62,7 @@ agentic --show-graph mermaid --save-graph graph.mmd
 1. Add `AgentSpec` in `AgentRegistry._agents` in `src/agentic_system/agents/registry.py`
 2. Set `name`, `description`, `system_prompt`
 3. Attach either `tool_groups=[...]`, `tool_names=[...]`, or both
-4. If needed, update the router keywords in `Orchestrator._keyword_router`
+4. If needed, tune semantic routing logic in `Orchestrator._llm_router`
 
 ## 7) API tools with URLs later
 

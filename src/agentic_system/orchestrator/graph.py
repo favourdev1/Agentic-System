@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import create_react_agent
@@ -7,25 +8,54 @@ from langgraph.prebuilt import create_react_agent
 from agentic_system.agents.registry import AgentRegistry, AgentSpec
 from agentic_system.orchestrator.llm_factory import LLMFactory
 from agentic_system.orchestrator.state import OrchestratorState
-from agentic_system.tools.registry import ToolRegistry
+from agentic_system.agents.tool_registry import ToolRegistry
+
+
+class IntentResponse(BaseModel):
+    """Structured response from the LLM router."""
+
+    selected_agent: str = Field(
+        description="The ID of the agent to route the request to"
+    )
+    reasoning: str = Field(
+        description="Short explanation for why this agent was selected"
+    )
 
 
 class Orchestrator:
     def __init__(self) -> None:
         self._app = self._build_graph()
 
-    @staticmethod
-    def _keyword_router(user_input: str) -> tuple[str, str]:
-        lowered = user_input.lower()
-        if any(
-            token in lowered
-            for token in ["analyze", "analysis", "compare", "tradeoff", "reason"]
-        ):
-            return "analysis_assistant", "Matched analysis-oriented keywords"
-        return "general_assistant", "Default route"
+    def _llm_router(self, user_input: str) -> IntentResponse:
+        """Uses an LLM to semantically determine the best agent for the task."""
+        llm = LLMFactory.create_chat_model()
+
+        # Get available agents and their descriptions to provide context to the LLM
+        agents = AgentRegistry.descriptions()
+        agent_list_str = "\n".join(
+            [f"- {name}: {desc}" for name, desc in agents.items()]
+        )
+
+        system_prompt = (
+            "You are an intelligent intent classifier for an agentic system. "
+            "Your task is to analyze the user's input and select the most appropriate agent from the list below.\n\n"
+            "Available Agents:\n"
+            f"{agent_list_str}\n\n"
+            "Return the selected agent ID and a brief reasoning."
+        )
+
+        # Use structured output to guarantee valid routing
+        structured_llm = llm.with_structured_output(IntentResponse)
+        response = structured_llm.invoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_input),
+            ]
+        )
+        return response
 
     def route_node(self, state: OrchestratorState) -> OrchestratorState:
-        # If a target agent is explicitly provided, skip keyword routing
+        # If a target agent is explicitly provided, skip semantic routing
         if state.get("target_agent"):
             return {
                 "selected_agent": state["target_agent"],
@@ -33,8 +63,11 @@ class Orchestrator:
             }
 
         user_input = state["user_input"]
-        selected_agent, reason = self._keyword_router(user_input)
-        return {"selected_agent": selected_agent, "route_reason": reason}
+        router_result = self._llm_router(user_input)
+        return {
+            "selected_agent": router_result.selected_agent,
+            "route_reason": f"LLM Routing: {router_result.reasoning}",
+        }
 
     @staticmethod
     def _build_worker(spec: AgentSpec):

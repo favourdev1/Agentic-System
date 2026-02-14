@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field
 
 
 class CalculatorInput(BaseModel):
-    expression: str = Field(description="Simple python arithmetic expression, e.g. '(12+5)*3'")
+    expression: str = Field(
+        description="Simple python arithmetic expression, e.g. '(12+5)*3'"
+    )
 
 
 def build_calculator_tool() -> StructuredTool:
@@ -12,6 +14,7 @@ def build_calculator_tool() -> StructuredTool:
         if any(ch not in allowed for ch in expression):
             return "Invalid expression: only numbers and + - * / ( ) are allowed."
         try:
+            # Note: eval is used here with restricted globals/locals for simple math.
             result = eval(expression, {"__builtins__": {}}, {})
             return str(result)
         except Exception as exc:  # noqa: BLE001

@@ -8,16 +8,25 @@ from pydantic import BaseModel, Field
 
 
 class HttpGetInput(BaseModel):
-    query: str = Field(description="Free text query string passed to the upstream API")
+    params: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Key-value pairs for query parameters (e.g., {'search': 'term', 'page': 1})",
+    )
 
 
-def build_http_get_tool(name: str, description: str, base_url: str, timeout_seconds: int = 20) -> StructuredTool:
+def build_http_get_tool(
+    name: str,
+    description: str,
+    base_url: str,
+    headers: dict[str, str] | None = None,
+    timeout_seconds: int = 20,
+) -> StructuredTool:
     """Create a standardized GET tool wrapper for API-based integrations."""
 
-    def _run(query: str) -> str:
+    def _run(params: dict[str, Any]) -> str:
         try:
-            with httpx.Client(timeout=timeout_seconds) as client:
-                response = client.get(base_url, params={"q": query})
+            with httpx.Client(timeout=timeout_seconds, headers=headers) as client:
+                response = client.get(base_url, params=params)
                 response.raise_for_status()
                 payload: Any = response.json()
                 return str(payload)
