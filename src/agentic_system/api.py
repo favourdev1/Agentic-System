@@ -34,6 +34,7 @@ async def custom_swagger_ui_html():
 class InvokeRequest(BaseModel):
     prompt: str
     stream: bool = False
+    trace_tools: bool = False
     agent_id: str | None = None
 
 
@@ -51,7 +52,7 @@ def health_check():
     return {"status": "ok"}
 
 
-@router.post("/invoke", response_model=InvokeResponse)
+@router.post("/invoke")
 async def invoke_agent(request: InvokeRequest):
     try:
         if request.stream:
@@ -59,7 +60,9 @@ async def invoke_agent(request: InvokeRequest):
             async def _event_stream():
                 try:
                     async for payload in orchestrator.astream_response(
-                        request.prompt, agent_id=request.agent_id
+                        request.prompt,
+                        agent_id=request.agent_id,
+                        trace_tools=request.trace_tools,
                     ):
                         yield f"data: {json.dumps(payload)}\n\n"
                     yield 'data: {"type":"done"}\n\n'
@@ -67,7 +70,15 @@ async def invoke_agent(request: InvokeRequest):
                     payload = {"type": "error", "message": str(exc)}
                     yield f"data: {json.dumps(payload)}\n\n"
 
-            return StreamingResponse(_event_stream(), media_type="text/event-stream")
+            return StreamingResponse(
+                _event_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
 
         result = orchestrator.invoke(request.prompt, agent_id=request.agent_id)
         return InvokeResponse(response=result)

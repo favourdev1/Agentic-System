@@ -41,6 +41,11 @@ def main() -> None:
         action="store_true",
         help="Stream model output tokens instead of waiting for final response",
     )
+    parser.add_argument(
+        "--trace-tools",
+        action="store_true",
+        help="When streaming, include tool status events in output",
+    )
     parser.add_argument("--server", action="store_true", help="Start the API server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind the server to")
     parser.add_argument(
@@ -104,9 +109,20 @@ def main() -> None:
 
     orchestrator = Orchestrator()
     if args.stream:
+
         async def _run_stream() -> None:
-            async for chunk in orchestrator.astream_response(args.prompt):
-                print(chunk, end="", flush=True)
+            async for payload in orchestrator.astream_response(
+                args.prompt, trace_tools=args.trace_tools
+            ):
+                event_type = payload.get("type")
+                if event_type == "token":
+                    print(payload.get("content", ""), end="", flush=True)
+                elif event_type == "status":
+                    print(f"\n[status] {payload.get('content', '')}", flush=True)
+                elif event_type == "metadata":
+                    route = payload.get("route_reason", "")
+                    agent = payload.get("agent", "")
+                    print(f"\n\n[router] {route} (agent={agent})", flush=True)
             print()
 
         asyncio.run(_run_stream())

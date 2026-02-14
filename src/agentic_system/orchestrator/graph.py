@@ -32,6 +32,7 @@ class StreamProcessor:
         self.selected_agent = selected_agent
         self.route_reason = route_reason
         self.streamed_any = False
+        self.final_output_text = ""
         self._tool_map = {
             "calculator": "Consulting the calculator...",
             "bank_account_api": "Checking bank records...",
@@ -74,7 +75,23 @@ class StreamProcessor:
             tool_name = event.get("name", "tool")
             return {"type": "status", "content": f"Finished using {tool_name}."}
 
+        elif event_type == "on_chain_end":
+            output = event.get("data", {}).get("output")
+            text = self._extract_output_text(output)
+            if text:
+                self.final_output_text = text
+
         return None
+
+    @classmethod
+    def _extract_output_text(cls, output: Any) -> str:
+        if not isinstance(output, dict):
+            return ""
+        messages = output.get("messages")
+        if not isinstance(messages, list) or not messages:
+            return ""
+        last = messages[-1]
+        return cls.chunk_to_text(last)
 
     def get_metadata(self) -> dict[str, Any]:
         """Returns the final metadata payload."""
@@ -127,8 +144,6 @@ class Orchestrator:
 
         user_input = state["user_input"]
         router_result = self._llm_router(user_input)
-        print(f"routing to {router_result.selected_agent} explicitly")
-        print(f"reason : {router_result.reasoning}")
         return {
             "selected_agent": router_result.selected_agent,
             "route_reason": f"LLM Routing: {router_result.reasoning}",
@@ -138,7 +153,11 @@ class Orchestrator:
         if agent_id:
             return agent_id, f"Explicitly targeted: {agent_id}"
         router_result = self._llm_router(user_input)
-        return router_result.selected_agent, f"LLM Routing: {router_result.reasoning}"
+        selected_agent = router_result.selected_agent
+        if selected_agent not in AgentRegistry.descriptions():
+            selected_agent = "general_assistant"
+            return selected_agent, "LLM Routing fallback: invalid agent id from router"
+        return selected_agent, f"LLM Routing: {router_result.reasoning}"
 
     @staticmethod
     def _build_worker(spec: AgentSpec):
@@ -190,7 +209,7 @@ class Orchestrator:
         return result.get("response", "")
 
     async def astream_response(
-        self, user_input: str, agent_id: str | None = None
+        self, user_input: str, agent_id: str | None = None, trace_tools: bool = False
     ) -> AsyncIterator[dict[str, Any]]:
         """Streams the agent execution as a series of structured events."""
         selected_agent, route_reason = self._resolve_agent(user_input, agent_id)
@@ -212,23 +231,20 @@ class Orchestrator:
             version="v1",
         ):
             payload = processor.process_event(event)
+            if payload and payload.get("type") == "status" and not trace_tools:
+                continue
             if payload:
                 yield payload
 
-        # Fallback for non-streaming models or internal completions
+        # Fallback for non-streaming models: use captured final output from stream events.
         if not processor.streamed_any:
-            result = worker.invoke(
-                {
-                    "messages": [
-                        SystemMessage(content=spec.system_prompt),
-                        HumanMessage(content=user_input),
-                    ]
+            if processor.final_output_text:
+                yield {"type": "token", "content": processor.final_output_text}
+            else:
+                yield {
+                    "type": "status",
+                    "content": "No token stream available from this model/provider for this run.",
                 }
-            )
-            messages = result.get("messages", [])
-            text_output = messages[-1].content if messages else ""
-            if text_output:
-                yield {"type": "token", "content": str(text_output)}
 
         # Output final metadata
         yield processor.get_metadata()
