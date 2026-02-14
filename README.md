@@ -2,6 +2,7 @@
 
 This project is a standardized Python baseline for a multi-agent system with:
 - a central orchestrator
+- plan-aware execution strategy (`direct` vs `plan`)
 - class-based registries for agents and tools
 - reusable tool groups
 - LangSmith tracing
@@ -31,6 +32,7 @@ agentic --stream --trace-tools "Summarize current system design and suggest next
 
 Use default mode for blocking responses, or `--stream` for token streaming.
 Use `--trace-tools` only if you want tool-status trace events during streaming.
+Use `--session-id` to continue a persisted session and `--plan-step-budget` to run only part of a plan.
 
 ## 2.1) API modes
 
@@ -39,6 +41,12 @@ Use `--trace-tools` only if you want tool-status trace events during streaming.
 - Streaming mode (SSE): `{ "prompt": "...", "stream": true }`
 - Streaming with tool traces (SSE): `{ "prompt": "...", "stream": true, "trace_tools": true }`
 - Optional explicit routing in both modes: `{ "prompt": "...", "agent_id": "skill_enhancer" }`
+- Optional persistence controls: `{ "session_id": "existing-id", "plan_step_budget": 2 }`
+
+Execution behavior:
+- If `agent_id` is provided, orchestrator runs that agent directly (planning is bypassed).
+- Otherwise, orchestrator decides whether to execute directly or generate/execute a multi-step plan.
+- Session state (plan steps and completion status) is persisted in `SESSION_STORE_DIR` (default: `.agentic_sessions`).
 
 ## 3) Explore registry + graph
 
@@ -53,20 +61,20 @@ agentic --show-graph mermaid --save-graph graph.mmd
 ## 4) Architecture
 
 - `src/agentic_system/orchestrator/graph.py`
-  - `Orchestrator` class owns routing, graph construction, invocation, and graph rendering
+  - `Orchestrator` class owns routing, strategy decision, planning, execution, and graph rendering
 - `src/agentic_system/orchestrator/llm_factory.py`
   - `LLMFactory` class for provider-specific model initialization (`gemini` or `openai`)
 - `src/agentic_system/agents/registry.py`
   - `AgentRegistry` class + `AgentSpec`
-- `src/agentic_system/tools/registry.py`
+- `src/agentic_system/agents/tool_registry.py`
   - `ToolRegistry` class + `ToolSpec` + tool groups
 - `src/agentic_system/tools/web/http_get.py`
   - reusable HTTP API tool adapter (URL-ready)
 
 ## 5) Add a new tool (standard way)
 
-1. Implement tool in `src/agentic_system/tools/`
-2. Register in `ToolRegistry._tools` in `src/agentic_system/tools/registry.py`
+1. Implement tool builder in `src/agentic_system/agents/*/builders/` (or `src/agentic_system/tools/` if shared)
+2. Register in `ToolRegistry._tools` in `src/agentic_system/agents/tool_registry.py`
 3. Optionally include it in `ToolRegistry._groups`
 4. Reference group/tool in an agent spec
 
@@ -79,7 +87,7 @@ agentic --show-graph mermaid --save-graph graph.mmd
 
 ## 7) API tools with URLs later
 
-Wire endpoint URLs/env vars into `build_http_get_tool(...)` in:
-- `src/agentic_system/tools/registry.py`
+Wire endpoint URLs/env vars into your web tool builders and register them in:
+- `src/agentic_system/agents/tool_registry.py`
 
 No orchestrator changes are required.

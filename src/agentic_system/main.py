@@ -52,6 +52,15 @@ def main() -> None:
         "--port", type=int, default=8000, help="Port to run the server on"
     )
     parser.add_argument("--reload", action="store_true", help="Enable hot reloading")
+    parser.add_argument(
+        "--session-id",
+        help="Reuse an existing session id for persisted planning state",
+    )
+    parser.add_argument(
+        "--plan-step-budget",
+        type=int,
+        help="Max plan steps to execute in this run (plan mode only)",
+    )
     args = parser.parse_args()
 
     _configure_langsmith()
@@ -112,7 +121,10 @@ def main() -> None:
 
         async def _run_stream() -> None:
             async for payload in orchestrator.astream_response(
-                args.prompt, trace_tools=args.trace_tools
+                args.prompt,
+                trace_tools=args.trace_tools,
+                session_id=args.session_id,
+                plan_step_budget=args.plan_step_budget,
             ):
                 event_type = payload.get("type")
                 if event_type == "token":
@@ -122,13 +134,36 @@ def main() -> None:
                 elif event_type == "metadata":
                     route = payload.get("route_reason", "")
                     agent = payload.get("agent", "")
-                    print(f"\n\n[router] {route} (agent={agent})", flush=True)
+                    mode = payload.get("execution_mode", "")
+                    reason = payload.get("execution_reason", "")
+                    sid = payload.get("session_id", "")
+                    print(
+                        f"\n\n[router] {route} (agent={agent}, mode={mode}, session={sid})",
+                        flush=True,
+                    )
+                    if reason:
+                        print(f"[strategy] {reason}", flush=True)
+                elif event_type == "plan":
+                    objective = payload.get("objective", "")
+                    print(f"\n[plan] {objective}", flush=True)
+                    for idx, step in enumerate(payload.get("steps", []), start=1):
+                        print(f"  {idx}. {step.get('title', '')}", flush=True)
+                elif event_type == "step_result":
+                    title = payload.get("step_title", "")
+                    content = payload.get("content", "")
+                    print(f"\n[step] {title}\n{content}\n", flush=True)
             print()
 
         asyncio.run(_run_stream())
         return
 
-    print(orchestrator.invoke(args.prompt))
+    result = orchestrator.invoke_with_metadata(
+        args.prompt,
+        session_id=args.session_id,
+        plan_step_budget=args.plan_step_budget,
+    )
+    print(result["response"])
+    print(f"\n[session_id] {result['session_id']}")
 
 
 if __name__ == "__main__":

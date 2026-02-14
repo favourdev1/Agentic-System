@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     bank_api_auth_token: str = Field(default="", alias="BANK_API_AUTH_TOKEN")
     bank_api_session_cookie: str = Field(default="", alias="BANK_API_SESSION_COOKIE")
 
+    # File-based session persistence
+    session_store_dir: str = Field(
+        default=".agentic_sessions",
+        alias="SESSION_STORE_DIR",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

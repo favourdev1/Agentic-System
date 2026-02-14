@@ -4,8 +4,11 @@ from typing import Any
 
 from agentic_system.agents.tool_models import ToolSpec
 from agentic_system.agents.common.builders.core import build_calculator
+from agentic_system.agents.common.builders.web import (
+    build_web_search,
+    build_web_scrape,
+)
 from agentic_system.agents.analysis.builders.web import (
-    build_external_search_api,
     build_bank_account_api,
 )
 
@@ -17,9 +20,13 @@ class ToolRegistry:
             name="calculator",
             builder=build_calculator,
         ),
-        "external_search_api": ToolSpec(
-            name="external_search_api",
-            builder=build_external_search_api,
+        "web_search": ToolSpec(
+            name="web_search",
+            builder=build_web_search,
+        ),
+        "web_scrape": ToolSpec(
+            name="web_scrape",
+            builder=build_web_scrape,
         ),
         "bank_account_api": ToolSpec(
             name="bank_account_api",
@@ -29,8 +36,13 @@ class ToolRegistry:
 
     # Standardized tool groups. Reuse these across agents.
     _groups: dict[str, list[str]] = {
-        "core": ["calculator"],
-        "analysis_plus_api": ["calculator", "external_search_api", "bank_account_api"],
+        "core": ["calculator", "web_search", "web_scrape"],
+        "analysis_plus_api": [
+            "calculator",
+            "web_search",
+            "web_scrape",
+            "bank_account_api",
+        ],
     }
 
     @classmethod

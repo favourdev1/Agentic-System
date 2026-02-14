@@ -17,7 +17,8 @@ dependencies = [
   "requests>=2.32.0",
   "grandalf>=0.8",
   "fastapi",
-  "uvicorn"
+  "uvicorn",
+  "beautifulsoup4"
 ]
 
 [project.scripts]
