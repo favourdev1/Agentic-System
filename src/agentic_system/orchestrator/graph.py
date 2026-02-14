@@ -25,6 +25,66 @@ class IntentResponse(BaseModel):
     )
 
 
+class StreamProcessor:
+    """Helper to transform raw LangGraph events into user-friendly SSE payloads."""
+
+    def __init__(self, selected_agent: str, route_reason: str) -> None:
+        self.selected_agent = selected_agent
+        self.route_reason = route_reason
+        self.streamed_any = False
+        self._tool_map = {
+            "calculator": "Consulting the calculator...",
+            "bank_account_api": "Checking bank records...",
+            "external_search_api": "Searching the web...",
+        }
+
+    @staticmethod
+    def chunk_to_text(chunk: Any) -> str:
+        """Extracts plain text from various chat model chunk formats."""
+        content = getattr(chunk, "content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return "".join(parts)
+        return ""
+
+    def process_event(self, event: dict[str, Any]) -> dict[str, Any] | None:
+        """Translates a raw LangGraph event into a structured payload."""
+        event_type = event.get("event")
+
+        if event_type == "on_chat_model_stream":
+            chunk = event.get("data", {}).get("chunk")
+            text = self.chunk_to_text(chunk)
+            if text:
+                self.streamed_any = True
+                return {"type": "token", "content": text}
+
+        elif event_type == "on_tool_start":
+            tool_name = event.get("name", "tool")
+            msg = self._tool_map.get(tool_name, f"Using {tool_name}...")
+            return {"type": "status", "content": msg}
+
+        elif event_type == "on_tool_end":
+            tool_name = event.get("name", "tool")
+            return {"type": "status", "content": f"Finished using {tool_name}."}
+
+        return None
+
+    def get_metadata(self) -> dict[str, Any]:
+        """Returns the final metadata payload."""
+        return {
+            "type": "metadata",
+            "route_reason": self.route_reason,
+            "agent": self.selected_agent,
+        }
+
+
 class Orchestrator:
     def __init__(self) -> None:
         self._app = self._build_graph()
@@ -60,7 +120,6 @@ class Orchestrator:
     def route_node(self, state: OrchestratorState) -> OrchestratorState:
         # If a target agent is explicitly provided, skip semantic routing
         if state.get("target_agent"):
-           
             return {
                 "selected_agent": state["target_agent"],
                 "route_reason": f"Explicitly targeted: {state['target_agent']}",
@@ -130,29 +189,19 @@ class Orchestrator:
         result = self._app.invoke(input_data)
         return result.get("response", "")
 
-    @staticmethod
-    def _chunk_to_text(chunk: Any) -> str:
-        content = getattr(chunk, "content", "")
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            parts: list[str] = []
-            for item in content:
-                if isinstance(item, dict):
-                    text = item.get("text")
-                    if isinstance(text, str):
-                        parts.append(text)
-            return "".join(parts)
-        return ""
-
     async def astream_response(
         self, user_input: str, agent_id: str | None = None
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Streams the agent execution as a series of structured events."""
         selected_agent, route_reason = self._resolve_agent(user_input, agent_id)
         spec = AgentRegistry.get_agent(selected_agent)
         worker = self._build_worker(spec)
 
-        streamed_any = False
+        processor = StreamProcessor(selected_agent, route_reason)
+
+        # Signal initial routing
+        yield {"type": "status", "content": f"Thinking... (Routing: {selected_agent})"}
+
         async for event in worker.astream_events(
             {
                 "messages": [
@@ -162,15 +211,12 @@ class Orchestrator:
             },
             version="v1",
         ):
-            if event.get("event") != "on_chat_model_stream":
-                continue
-            chunk = event.get("data", {}).get("chunk")
-            text = self._chunk_to_text(chunk)
-            if text:
-                streamed_any = True
-                yield text
+            payload = processor.process_event(event)
+            if payload:
+                yield payload
 
-        if not streamed_any:
+        # Fallback for non-streaming models or internal completions
+        if not processor.streamed_any:
             result = worker.invoke(
                 {
                     "messages": [
@@ -182,9 +228,10 @@ class Orchestrator:
             messages = result.get("messages", [])
             text_output = messages[-1].content if messages else ""
             if text_output:
-                yield str(text_output)
+                yield {"type": "token", "content": str(text_output)}
 
-        yield f"\n\n(router: {route_reason}, agent: {selected_agent})"
+        # Output final metadata
+        yield processor.get_metadata()
 
     def mermaid(self) -> str:
         return self._app.get_graph().draw_mermaid()

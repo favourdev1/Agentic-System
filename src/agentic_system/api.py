@@ -55,12 +55,12 @@ def health_check():
 async def invoke_agent(request: InvokeRequest):
     try:
         if request.stream:
+
             async def _event_stream():
                 try:
-                    async for chunk in orchestrator.astream_response(
+                    async for payload in orchestrator.astream_response(
                         request.prompt, agent_id=request.agent_id
                     ):
-                        payload = {"type": "token", "content": chunk}
                         yield f"data: {json.dumps(payload)}\n\n"
                     yield 'data: {"type":"done"}\n\n'
                 except Exception as exc:  # noqa: BLE001
