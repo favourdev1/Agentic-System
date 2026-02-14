@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 
 from agentic_system.agents.registry import AgentRegistry
@@ -35,6 +36,11 @@ def main() -> None:
         help="Print orchestrator graph in the selected format",
     )
     parser.add_argument("--save-graph", help="Save graph output to a file path")
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Stream model output tokens instead of waiting for final response",
+    )
     parser.add_argument("--server", action="store_true", help="Start the API server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind the server to")
     parser.add_argument(
@@ -97,6 +103,15 @@ def main() -> None:
     from agentic_system.orchestrator.graph import Orchestrator
 
     orchestrator = Orchestrator()
+    if args.stream:
+        async def _run_stream() -> None:
+            async for chunk in orchestrator.astream_response(args.prompt):
+                print(chunk, end="", flush=True)
+            print()
+
+        asyncio.run(_run_stream())
+        return
+
     print(orchestrator.invoke(args.prompt))
 
 

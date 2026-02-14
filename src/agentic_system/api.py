@@ -1,7 +1,8 @@
+import json
 import requests
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agentic_system.config.settings import get_settings
@@ -32,6 +33,8 @@ async def custom_swagger_ui_html():
 
 class InvokeRequest(BaseModel):
     prompt: str
+    stream: bool = False
+    agent_id: str | None = None
 
 
 class InvokeResponse(BaseModel):
@@ -51,7 +54,22 @@ def health_check():
 @router.post("/invoke", response_model=InvokeResponse)
 async def invoke_agent(request: InvokeRequest):
     try:
-        result = orchestrator.invoke(request.prompt)
+        if request.stream:
+            async def _event_stream():
+                try:
+                    async for chunk in orchestrator.astream_response(
+                        request.prompt, agent_id=request.agent_id
+                    ):
+                        payload = {"type": "token", "content": chunk}
+                        yield f"data: {json.dumps(payload)}\n\n"
+                    yield 'data: {"type":"done"}\n\n'
+                except Exception as exc:  # noqa: BLE001
+                    payload = {"type": "error", "message": str(exc)}
+                    yield f"data: {json.dumps(payload)}\n\n"
+
+            return StreamingResponse(_event_stream(), media_type="text/event-stream")
+
+        result = orchestrator.invoke(request.prompt, agent_id=request.agent_id)
         return InvokeResponse(response=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

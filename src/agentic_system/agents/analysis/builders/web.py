@@ -16,12 +16,15 @@ def build_external_search_api():
 
 def build_bank_account_api():
     """Builds the bank account API tool with enhanced semantic descriptions for the agent."""
-    # Auth configuration provided by user
-    base_url = "http://localhost:8000/api/v2/bank-account/request"
-    headers = {
-        "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjgwMDAvYXBpL3YxL2FkbWluL2xvZ2luIiwiaWF0IjoxNzY5NDk0OTY2LCJleHAiOjIzNjk0OTQ5MDYsIm5iZiI6MTc2OTQ5NDk2NiwianRpIjoiS29rZHdydjZ1Q291YlE0WSIsInN1YiI6IjIyIiwicHJ2IjoiZGY4ODNkYjk3YmQwNWVmOGZmODUwODJkNjg2YzQ1ZTgzMmU1OTNhOSJ9.8YRts4fQGOCgru84Ui7j-m39geQ2a3PEojRDxPeNM8M",
-        "Cookie": "gopaddi_session=giuVUe4DEWaaFV9UESgGGcS83Br6FPPTfzj67pM5",
-    }
+    # Values extracted from settings (environment variables)
+    base_url = settings.bank_api_base_url
+    headers = {}
+
+    if settings.bank_api_auth_token:
+        headers["Authorization"] = f"Bearer {settings.bank_api_auth_token}"
+
+    if settings.bank_api_session_cookie:
+        headers["Cookie"] = f"gopaddi_session={settings.bank_api_session_cookie}"
 
     description = (
         "Fetch bank account requests. Use this tool to search or filter bank transaction requests. "

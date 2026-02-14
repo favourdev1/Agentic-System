@@ -25,7 +25,17 @@ Set at least:
 
 ```bash
 agentic "Summarize current system design and suggest next steps"
+agentic --stream "Summarize current system design and suggest next steps"
 ```
+
+Use default mode for blocking responses, or `--stream` for token streaming.
+
+## 2.1) API modes
+
+`POST /api/invoke` supports both modes:
+- Blocking mode: `{ "prompt": "..." }`
+- Streaming mode (SSE): `{ "prompt": "...", "stream": true }`
+- Optional explicit routing in both modes: `{ "prompt": "...", "agent_id": "skill_enhancer" }`
 
 ## 3) Explore registry + graph
 

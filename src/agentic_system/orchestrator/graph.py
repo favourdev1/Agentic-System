@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from typing import Any
+
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
@@ -57,6 +60,7 @@ class Orchestrator:
     def route_node(self, state: OrchestratorState) -> OrchestratorState:
         # If a target agent is explicitly provided, skip semantic routing
         if state.get("target_agent"):
+           
             return {
                 "selected_agent": state["target_agent"],
                 "route_reason": f"Explicitly targeted: {state['target_agent']}",
@@ -64,10 +68,18 @@ class Orchestrator:
 
         user_input = state["user_input"]
         router_result = self._llm_router(user_input)
+        print(f"routing to {router_result.selected_agent} explicitly")
+        print(f"reason : {router_result.reasoning}")
         return {
             "selected_agent": router_result.selected_agent,
             "route_reason": f"LLM Routing: {router_result.reasoning}",
         }
+
+    def _resolve_agent(self, user_input: str, agent_id: str | None) -> tuple[str, str]:
+        if agent_id:
+            return agent_id, f"Explicitly targeted: {agent_id}"
+        router_result = self._llm_router(user_input)
+        return router_result.selected_agent, f"LLM Routing: {router_result.reasoning}"
 
     @staticmethod
     def _build_worker(spec: AgentSpec):
@@ -117,6 +129,62 @@ class Orchestrator:
             input_data["target_agent"] = agent_id
         result = self._app.invoke(input_data)
         return result.get("response", "")
+
+    @staticmethod
+    def _chunk_to_text(chunk: Any) -> str:
+        content = getattr(chunk, "content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return "".join(parts)
+        return ""
+
+    async def astream_response(
+        self, user_input: str, agent_id: str | None = None
+    ) -> AsyncIterator[str]:
+        selected_agent, route_reason = self._resolve_agent(user_input, agent_id)
+        spec = AgentRegistry.get_agent(selected_agent)
+        worker = self._build_worker(spec)
+
+        streamed_any = False
+        async for event in worker.astream_events(
+            {
+                "messages": [
+                    SystemMessage(content=spec.system_prompt),
+                    HumanMessage(content=user_input),
+                ]
+            },
+            version="v1",
+        ):
+            if event.get("event") != "on_chat_model_stream":
+                continue
+            chunk = event.get("data", {}).get("chunk")
+            text = self._chunk_to_text(chunk)
+            if text:
+                streamed_any = True
+                yield text
+
+        if not streamed_any:
+            result = worker.invoke(
+                {
+                    "messages": [
+                        SystemMessage(content=spec.system_prompt),
+                        HumanMessage(content=user_input),
+                    ]
+                }
+            )
+            messages = result.get("messages", [])
+            text_output = messages[-1].content if messages else ""
+            if text_output:
+                yield str(text_output)
+
+        yield f"\n\n(router: {route_reason}, agent: {selected_agent})"
 
     def mermaid(self) -> str:
         return self._app.get_graph().draw_mermaid()
