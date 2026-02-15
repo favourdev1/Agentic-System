@@ -9,13 +9,13 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 
 from agentic_system.agents.registry import AgentRegistry, AgentSpec
-from agentic_system.agents.tool_registry import ToolRegistry
 from agentic_system.config.settings import get_settings
 from agentic_system.orchestrator.llm_factory import LLMFactory
 from agentic_system.orchestrator.state import OrchestratorState
 from agentic_system.orchestrator.ui_models import UiSpec
 from agentic_system.prompting import PromptManager
 from agentic_system.session_store import FileSessionStore
+from agentic_system.tools.registry import ToolRegistry
 
 
 class IntentResponse(BaseModel):

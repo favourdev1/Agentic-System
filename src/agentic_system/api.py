@@ -1,8 +1,10 @@
 import json
+from pathlib import Path
+
 import requests
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agentic_system.config.settings import get_settings
@@ -12,11 +14,14 @@ app = FastAPI(title="Agentic System API", docs_url=None, redoc_url=None)
 router = APIRouter(prefix="/api")
 orchestrator = Orchestrator()
 settings = get_settings()
+WEB_DIR = Path(__file__).resolve().parent / "web"
+INDEX_HTML = WEB_DIR / "index.html"
 
 
 @app.get("/", include_in_schema=False)
-async def root_redirect():
-    return RedirectResponse(url="/api/docs")
+async def root_ui():
+    # Serve the client-side chat console from the same host/port as the API.
+    return FileResponse(INDEX_HTML)
 
 
 @router.get("/docs", include_in_schema=False)

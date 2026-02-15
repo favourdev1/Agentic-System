@@ -1,11 +1,11 @@
 from agentic_system.config.settings import get_settings
-from agentic_system.tools.web.http_get import build_http_get_tool
+from agentic_system.tools.tool_factory.web.http_get import build_http_get_tool
 
 settings = get_settings()
 
 
 def build_external_search_api():
-    """Builds the external search API tool."""
+    """Build an external search API tool placeholder."""
     return build_http_get_tool(
         name="external_search_api",
         description="Query external search endpoint. Pass search keywords in the 'q' parameter.",
@@ -15,8 +15,7 @@ def build_external_search_api():
 
 
 def build_bank_account_api():
-    """Builds the bank account API tool with enhanced semantic descriptions for the agent."""
-    # Values extracted from settings (environment variables)
+    """Build the bank account API tool with semantic usage guidance for the agent."""
     base_url = settings.bank_api_base_url
     headers = {}
 

@@ -2,39 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from agentic_system.agents.tool_models import ToolSpec
-from agentic_system.agents.common.builders.core import build_calculator
-from agentic_system.agents.common.builders.web import (
-    build_web_search,
+from agentic_system.tools.builders.analysis.web import build_bank_account_api
+from agentic_system.tools.builders.common.core import build_calculator
+from agentic_system.tools.builders.common.web import (
     build_web_scrape,
+    build_web_search,
 )
-from agentic_system.agents.analysis.builders.web import (
-    build_bank_account_api,
-)
+from agentic_system.tools.tool_models import ToolSpec
 
 
 class ToolRegistry:
-    # Standardized tool registry. Add new tools here and reference by name from groups/agents.
+    """Central tool registry and reusable tool groups."""
+
     _tools: dict[str, ToolSpec] = {
-        "calculator": ToolSpec(
-            name="calculator",
-            builder=build_calculator,
-        ),
-        "web_search": ToolSpec(
-            name="web_search",
-            builder=build_web_search,
-        ),
-        "web_scrape": ToolSpec(
-            name="web_scrape",
-            builder=build_web_scrape,
-        ),
-        "bank_account_api": ToolSpec(
-            name="bank_account_api",
-            builder=build_bank_account_api,
-        ),
+        "calculator": ToolSpec(name="calculator", builder=build_calculator),
+        "web_search": ToolSpec(name="web_search", builder=build_web_search),
+        "web_scrape": ToolSpec(name="web_scrape", builder=build_web_scrape),
+        "bank_account_api": ToolSpec(name="bank_account_api", builder=build_bank_account_api),
     }
 
-    # Standardized tool groups. Reuse these across agents.
     _groups: dict[str, list[str]] = {
         "core": ["calculator", "web_search", "web_scrape"],
         "analysis_plus_api": [

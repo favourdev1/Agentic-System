@@ -50,7 +50,7 @@ def main() -> None:
     parser.add_argument("--server", action="store_true", help="Start the API server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind the server to")
     parser.add_argument(
-        "--port", type=int, default=8000, help="Port to run the server on"
+        "--port", type=int, default=8888, help="Port to run the server on"
     )
     parser.add_argument("--reload", action="store_true", help="Enable hot reloading")
     parser.add_argument(
@@ -110,7 +110,7 @@ def main() -> None:
         return
 
     if args.list_tool_groups:
-        from agentic_system.agents.tool_registry import ToolRegistry
+        from agentic_system.tools.registry import ToolRegistry
 
         for group_name, tools in ToolRegistry.list_groups().items():
             print(f"- {group_name}: {', '.join(tools)}")
