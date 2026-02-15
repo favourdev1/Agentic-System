@@ -13,6 +13,8 @@ from agentic_system.agents.tool_registry import ToolRegistry
 from agentic_system.config.settings import get_settings
 from agentic_system.orchestrator.llm_factory import LLMFactory
 from agentic_system.orchestrator.state import OrchestratorState
+from agentic_system.orchestrator.ui_models import UiSpec
+from agentic_system.prompting import PromptManager
 from agentic_system.session_store import FileSessionStore
 
 
@@ -116,6 +118,10 @@ class Orchestrator:
         self._app = self._build_graph()
         settings = get_settings()
         self._store = FileSessionStore(settings.session_store_dir)
+        self._prompts = PromptManager(
+            settings.prompt_config_dir,
+            version_override=settings.prompt_version or None,
+        )
 
     @staticmethod
     def _safe_agent_id(candidate: str) -> str:
@@ -131,16 +137,12 @@ class Orchestrator:
         llm = LLMFactory.create_chat_model()
         agents = AgentRegistry.descriptions()
         agent_list = "\n".join([f"- {name}: {desc}" for name, desc in agents.items()])
-
-        system_prompt = (
-            "You are an intent router for a multi-agent system. "
-            "Select exactly one agent ID from the available list."
-            "\n\nAvailable agents:\n"
-            f"{agent_list}\n\n"
-            "Return selected_agent and a brief reasoning."
+        system_prompt = self._prompts.get_prompt("router_system", agent_list=agent_list)
+        user_prompt = self._prompts.get_prompt(
+            "router_user",
+            user_input=user_input,
+            session_context=session_context or "None",
         )
-
-        user_prompt = f"User request: {user_input}\n\nSession context:\n{session_context or 'None'}"
         structured_llm = llm.with_structured_output(IntentResponse)
         result = structured_llm.invoke(
             [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
@@ -164,19 +166,14 @@ class Orchestrator:
         llm = LLMFactory.create_chat_model()
         spec = AgentRegistry.get_agent(selected_agent)
         tools = ToolRegistry.resolve_tool_names(spec.tool_names, spec.tool_groups)
-
-        system_prompt = (
-            "You are an execution strategist. Decide whether to run DIRECT or PLAN. "
-            "Choose DIRECT for straightforward single-pass tasks. "
-            "Choose PLAN when the request requires multiple dependent steps, staged data gathering, "
-            "or iterative validation. Return mode and a brief reason."
-        )
-        context_prompt = (
-            f"Selected agent: {selected_agent}\n"
-            f"Agent description: {spec.description}\n"
-            f"Available tools: {', '.join(tools) if tools else 'none'}\n"
-            f"User request: {user_input}\n\n"
-            f"Session context:\n{session_context or 'None'}"
+        system_prompt = self._prompts.get_prompt("mode_system")
+        context_prompt = self._prompts.get_prompt(
+            "mode_user",
+            selected_agent=selected_agent,
+            agent_description=spec.description,
+            available_tools=", ".join(tools) if tools else "none",
+            user_input=user_input,
+            session_context=session_context or "None",
         )
 
         structured_llm = llm.with_structured_output(ExecutionDecision)
@@ -193,19 +190,14 @@ class Orchestrator:
         llm = LLMFactory.create_chat_model()
         spec = AgentRegistry.get_agent(selected_agent)
         tools = ToolRegistry.resolve_tool_names(spec.tool_names, spec.tool_groups)
-
-        system_prompt = (
-            "Create an executable task plan with 2 to 6 steps. "
-            "Each step must be operational (what to do), testable (success criteria), "
-            "and suitable for tool-assisted execution. "
-            "Do not include private reasoning or chain-of-thought."
-        )
-        context_prompt = (
-            f"Agent: {selected_agent}\n"
-            f"Agent description: {spec.description}\n"
-            f"Available tools: {', '.join(tools) if tools else 'none'}\n"
-            f"User request: {user_input}\n\n"
-            f"Session context:\n{session_context or 'None'}"
+        system_prompt = self._prompts.get_prompt("plan_system")
+        context_prompt = self._prompts.get_prompt(
+            "plan_user",
+            selected_agent=selected_agent,
+            agent_description=spec.description,
+            available_tools=", ".join(tools) if tools else "none",
+            user_input=user_input,
+            session_context=session_context or "None",
         )
 
         structured_llm = llm.with_structured_output(ExecutionPlan)
@@ -223,6 +215,26 @@ class Orchestrator:
                 )
             ]
         return ExecutionPlan(objective=plan.objective or user_input, steps=normalized_steps)
+
+    def _build_ui_spec(self, user_input: str, response_text: str) -> UiSpec | None:
+        # UI generation is optional and runs as a post-processing pass over the final text response.
+        if not response_text.strip():
+            return None
+
+        llm = LLMFactory.create_chat_model()
+        system_prompt = self._prompts.get_prompt("ui_system")
+        user_prompt = self._prompts.get_prompt(
+            "ui_user",
+            user_input=user_input,
+            response_text=response_text,
+        )
+        structured_llm = llm.with_structured_output(UiSpec)
+        ui = structured_llm.invoke(
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        )
+        if ui.layout == "none" and not ui.cards and ui.table is None:
+            return None
+        return ui
 
     @staticmethod
     def _build_worker(spec: AgentSpec):
@@ -334,13 +346,16 @@ class Orchestrator:
             previous = "\n".join(
                 [f"{i+1}. {item['title']}: {item['result']}" for i, item in enumerate(completed)]
             )
-            step_prompt = (
-                f"Original goal: {state['user_input']}\n"
-                f"Plan objective: {state.get('plan_objective', state['user_input'])}\n"
-                f"Current step ({index}/{len(plan_steps)}): {step['title']}\n"
-                f"Instruction: {step['instruction']}\n"
-                f"Success criteria: {step['success_criteria']}\n"
-                f"Completed context:\n{previous if previous else 'None yet'}"
+            step_prompt = self._prompts.get_prompt(
+                "step_user",
+                user_input=state["user_input"],
+                plan_objective=state.get("plan_objective", state["user_input"]),
+                step_index=index,
+                step_count=len(plan_steps),
+                step_title=step["title"],
+                step_instruction=step["instruction"],
+                step_success_criteria=step["success_criteria"],
+                completed_context=previous if previous else "None yet",
             )
 
             try:
@@ -365,13 +380,13 @@ class Orchestrator:
         all_completed = all(step["status"] == "completed" for step in step_results)
 
         if all_completed:
-            synthesis_prompt = (
-                "Produce the final response to the original request using completed plan outputs. "
-                "Keep it concise, factual, and directly useful.\n\n"
-                f"Original request: {state['user_input']}\n"
-                f"Plan objective: {state.get('plan_objective', state['user_input'])}\n"
-                "Completed steps:\n"
-                + "\n".join([f"- {item['title']}: {item['result']}" for item in completed])
+            synthesis_prompt = self._prompts.get_prompt(
+                "synthesis_user",
+                user_input=state["user_input"],
+                plan_objective=state.get("plan_objective", state["user_input"]),
+                completed_steps="\n".join(
+                    [f"- {item['title']}: {item['result']}" for item in completed]
+                ),
             )
             final_result = worker.invoke(
                 {
@@ -459,6 +474,7 @@ class Orchestrator:
         execution_mode: str,
         route_reason: str,
         execution_reason: str,
+        prompt_version: str,
         plan_objective: str | None,
         plan_steps: list[dict[str, Any]] | None,
         step_results: list[dict[str, Any]] | None,
@@ -477,6 +493,7 @@ class Orchestrator:
             execution_mode=execution_mode,
             route_reason=route_reason,
             execution_reason=execution_reason,
+            prompt_version=prompt_version,
         )
         self._store.save(record)
 
@@ -486,6 +503,7 @@ class Orchestrator:
         agent_id: str | None = None,
         session_id: str | None = None,
         plan_step_budget: int | None = None,
+        generate_ui: bool = False,
     ) -> dict[str, Any]:
         sid, session_context, _ = self._prepare_session(session_id)
 
@@ -506,6 +524,10 @@ class Orchestrator:
         execution_mode = result.get("execution_mode", "direct")
         route_reason = result.get("route_reason", "")
         execution_reason = result.get("execution_reason", "")
+        prompt_version = self._prompts.get_active_version()
+        ui_spec: UiSpec | None = None
+        if generate_ui:
+            ui_spec = self._build_ui_spec(user_input=user_input, response_text=response)
 
         self._persist_session(
             session_id=sid,
@@ -515,6 +537,7 @@ class Orchestrator:
             execution_mode=execution_mode,
             route_reason=route_reason,
             execution_reason=execution_reason,
+            prompt_version=prompt_version,
             plan_objective=result.get("plan_objective"),
             plan_steps=result.get("plan_steps"),
             step_results=result.get("step_results"),
@@ -527,6 +550,8 @@ class Orchestrator:
             "execution_mode": execution_mode,
             "execution_reason": execution_reason,
             "route_reason": route_reason,
+            "prompt_version": prompt_version,
+            "ui_spec": ui_spec.model_dump() if ui_spec else None,
         }
 
     def invoke(
@@ -535,12 +560,14 @@ class Orchestrator:
         agent_id: str | None = None,
         session_id: str | None = None,
         plan_step_budget: int | None = None,
+        generate_ui: bool = False,
     ) -> str:
         return self.invoke_with_metadata(
             user_input=user_input,
             agent_id=agent_id,
             session_id=session_id,
             plan_step_budget=plan_step_budget,
+            generate_ui=generate_ui,
         )["response"]
 
     async def _stream_worker_events(
@@ -581,6 +608,7 @@ class Orchestrator:
         trace_tools: bool = False,
         session_id: str | None = None,
         plan_step_budget: int | None = None,
+        generate_ui: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         sid, session_context, _ = self._prepare_session(session_id)
 
@@ -607,6 +635,7 @@ class Orchestrator:
             "agent": selected_agent,
             "execution_mode": decision.mode,
             "execution_reason": decision.reason,
+            "prompt_version": self._prompts.get_active_version(),
         }
 
         spec = AgentRegistry.get_agent(selected_agent)
@@ -625,6 +654,12 @@ class Orchestrator:
                 yield payload
 
             final_response = "".join(streamed_text_parts)
+            ui_spec: UiSpec | None = None
+            if generate_ui:
+                ui_spec = self._build_ui_spec(
+                    user_input=user_input,
+                    response_text=final_response,
+                )
             self._persist_session(
                 session_id=sid,
                 user_input=user_input,
@@ -633,6 +668,7 @@ class Orchestrator:
                 execution_mode=decision.mode,
                 route_reason=route_reason,
                 execution_reason=decision.reason,
+                prompt_version=self._prompts.get_active_version(),
                 plan_objective=None,
                 plan_steps=None,
                 step_results=None,
@@ -646,7 +682,10 @@ class Orchestrator:
                 "agent": selected_agent,
                 "execution_mode": decision.mode,
                 "execution_reason": decision.reason,
+                "prompt_version": self._prompts.get_active_version(),
             }
+            if ui_spec:
+                yield {"type": "ui", "payload": ui_spec.model_dump()}
             return
 
         plan = self._build_plan(user_input, selected_agent, session_context=session_context)
@@ -683,13 +722,16 @@ class Orchestrator:
             completed_context = "\n".join(
                 [f"{i+1}. {item['title']}: {item['result']}" for i, item in enumerate(completed)]
             )
-            step_prompt = (
-                f"Original goal: {user_input}\n"
-                f"Plan objective: {plan.objective}\n"
-                f"Current step ({index}/{len(plan.steps)}): {step.title}\n"
-                f"Instruction: {step.instruction}\n"
-                f"Success criteria: {step.success_criteria}\n"
-                f"Completed context:\n{completed_context if completed_context else 'None yet'}"
+            step_prompt = self._prompts.get_prompt(
+                "step_user",
+                user_input=user_input,
+                plan_objective=plan.objective,
+                step_index=index,
+                step_count=len(plan.steps),
+                step_title=step.title,
+                step_instruction=step.instruction,
+                step_success_criteria=step.success_criteria,
+                completed_context=completed_context if completed_context else "None yet",
             )
 
             try:
@@ -723,13 +765,13 @@ class Orchestrator:
         all_completed = all(s["status"] == "completed" for s in step_results)
         final_text = ""
         if all_completed:
-            synthesis_prompt = (
-                "Produce the final response to the original request using completed plan outputs. "
-                "Keep it concise, factual, and directly useful.\n\n"
-                f"Original request: {user_input}\n"
-                f"Plan objective: {plan.objective}\n"
-                "Completed steps:\n"
-                + "\n".join([f"- {item['title']}: {item['result']}" for item in completed])
+            synthesis_prompt = self._prompts.get_prompt(
+                "synthesis_user",
+                user_input=user_input,
+                plan_objective=plan.objective,
+                completed_steps="\n".join(
+                    [f"- {item['title']}: {item['result']}" for item in completed]
+                ),
             )
             final_result = worker.invoke(
                 {
@@ -762,6 +804,7 @@ class Orchestrator:
             execution_mode=decision.mode,
             route_reason=route_reason,
             execution_reason=decision.reason,
+            prompt_version=self._prompts.get_active_version(),
             plan_objective=plan.objective,
             plan_steps=plan_payload["steps"],
             step_results=step_results,
@@ -776,7 +819,21 @@ class Orchestrator:
             "execution_mode": decision.mode,
             "execution_reason": decision.reason,
             "plan_steps": len(plan.steps),
+            "prompt_version": self._prompts.get_active_version(),
         }
+        if generate_ui:
+            ui_spec = self._build_ui_spec(user_input=user_input, response_text=final_text)
+            if ui_spec:
+                yield {"type": "ui", "payload": ui_spec.model_dump()}
+
+    def current_prompt_version(self) -> str:
+        return self._prompts.get_active_version()
+
+    def list_prompt_versions(self) -> list[str]:
+        return self._prompts.list_versions()
+
+    def set_prompt_version(self, version: str) -> None:
+        self._prompts.set_active_version(version)
 
     def mermaid(self) -> str:
         return self._app.get_graph().draw_mermaid()

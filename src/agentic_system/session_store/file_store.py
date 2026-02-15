@@ -134,6 +134,7 @@ class FileSessionStore:
         execution_mode: str,
         route_reason: str,
         execution_reason: str,
+        prompt_version: str | None = None,
     ) -> None:
         run = {
             "timestamp": self._now_iso(),
@@ -143,6 +144,7 @@ class FileSessionStore:
             "execution_mode": execution_mode,
             "route_reason": route_reason,
             "execution_reason": execution_reason,
+            "prompt_version": prompt_version or "",
         }
         record["last_run"] = run
         history = record.get("run_history")

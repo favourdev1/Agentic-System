@@ -28,11 +28,13 @@ Set at least:
 agentic "Summarize current system design and suggest next steps"
 agentic --stream "Summarize current system design and suggest next steps"
 agentic --stream --trace-tools "Summarize current system design and suggest next steps"
+agentic --generate-ui "Summarize current system design and suggest next steps"
 ```
 
 Use default mode for blocking responses, or `--stream` for token streaming.
 Use `--trace-tools` only if you want tool-status trace events during streaming.
 Use `--session-id` to continue a persisted session and `--plan-step-budget` to run only part of a plan.
+Use `--generate-ui` to attach structured render payloads (cards/table/mixed).
 
 ## 2.1) API modes
 
@@ -42,11 +44,32 @@ Use `--session-id` to continue a persisted session and `--plan-step-budget` to r
 - Streaming with tool traces (SSE): `{ "prompt": "...", "stream": true, "trace_tools": true }`
 - Optional explicit routing in both modes: `{ "prompt": "...", "agent_id": "skill_enhancer" }`
 - Optional persistence controls: `{ "session_id": "existing-id", "plan_step_budget": 2 }`
+- Optional generative UI payload: `{ "generate_ui": true }` (returns `ui_spec` in blocking mode and `type: \"ui\"` event in streaming mode)
+- Responses include `prompt_version` for auditability.
 
 Execution behavior:
 - If `agent_id` is provided, orchestrator runs that agent directly (planning is bypassed).
 - Otherwise, orchestrator decides whether to execute directly or generate/execute a multi-step plan.
 - Session state (plan steps and completion status) is persisted in `SESSION_STORE_DIR` (default: `.agentic_sessions`).
+
+## 2.2) Prompt Governance
+
+Prompt packs are versioned on disk:
+- `prompts/versions/*.json`
+- `prompts/active_version.txt`
+- `prompts/CHANGELOG.md`
+
+CLI governance commands:
+```bash
+agentic --list-prompt-versions
+agentic --show-prompt-version
+agentic --set-prompt-version v1   # rollback example
+agentic --set-prompt-version v2   # move forward again
+```
+
+Environment controls:
+- `PROMPT_CONFIG_DIR` (default `prompts`)
+- `PROMPT_VERSION` (optional override; if set, it forces that version at runtime)
 
 ## 3) Explore registry + graph
 

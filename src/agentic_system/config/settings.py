@@ -43,6 +43,16 @@ class Settings(BaseSettings):
         alias="SESSION_STORE_DIR",
     )
 
+    # Prompt governance
+    prompt_config_dir: str = Field(
+        default="prompts",
+        alias="PROMPT_CONFIG_DIR",
+    )
+    prompt_version: str = Field(
+        default="",
+        alias="PROMPT_VERSION",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

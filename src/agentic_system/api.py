@@ -35,6 +35,7 @@ class InvokeRequest(BaseModel):
     prompt: str
     stream: bool = False
     trace_tools: bool = False
+    generate_ui: bool = False
     agent_id: str | None = None
     session_id: str | None = None
     plan_step_budget: int | None = None
@@ -45,6 +46,8 @@ class InvokeResponse(BaseModel):
     session_id: str
     execution_mode: str | None = None
     selected_agent: str | None = None
+    prompt_version: str | None = None
+    ui_spec: dict | None = None
 
 
 class EnhanceSkillRequest(BaseModel):
@@ -70,6 +73,7 @@ async def invoke_agent(request: InvokeRequest):
                         trace_tools=request.trace_tools,
                         session_id=request.session_id,
                         plan_step_budget=request.plan_step_budget,
+                        generate_ui=request.generate_ui,
                     ):
                         yield f"data: {json.dumps(payload)}\n\n"
                     yield 'data: {"type":"done"}\n\n'
@@ -92,12 +96,15 @@ async def invoke_agent(request: InvokeRequest):
             agent_id=request.agent_id,
             session_id=request.session_id,
             plan_step_budget=request.plan_step_budget,
+            generate_ui=request.generate_ui,
         )
         return InvokeResponse(
             response=result["response"],
             session_id=result["session_id"],
             execution_mode=result.get("execution_mode"),
             selected_agent=result.get("selected_agent"),
+            prompt_version=result.get("prompt_version"),
+            ui_spec=result.get("ui_spec"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -114,6 +121,8 @@ async def enhance_skill(request: EnhanceSkillRequest):
             session_id=result["session_id"],
             execution_mode=result.get("execution_mode"),
             selected_agent=result.get("selected_agent"),
+            prompt_version=result.get("prompt_version"),
+            ui_spec=result.get("ui_spec"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

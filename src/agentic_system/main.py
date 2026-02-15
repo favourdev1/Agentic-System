@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 
-from agentic_system.agents.registry import AgentRegistry
-from agentic_system.agents.tool_registry import ToolRegistry
+from agentic_system.config.settings import get_settings
+from agentic_system.prompting import PromptManager
 
 
 def _configure_langsmith() -> None:
@@ -61,11 +62,32 @@ def main() -> None:
         type=int,
         help="Max plan steps to execute in this run (plan mode only)",
     )
+    parser.add_argument(
+        "--generate-ui",
+        action="store_true",
+        help="Generate a structured UI payload (cards/table/mixed) alongside text",
+    )
+    parser.add_argument(
+        "--list-prompt-versions",
+        action="store_true",
+        help="List available governed prompt versions",
+    )
+    parser.add_argument(
+        "--show-prompt-version",
+        action="store_true",
+        help="Show currently active prompt version",
+    )
+    parser.add_argument(
+        "--set-prompt-version",
+        help="Set active prompt version (supports rollback)",
+    )
     args = parser.parse_args()
 
     _configure_langsmith()
 
     if args.list_agents:
+        from agentic_system.agents.registry import AgentRegistry
+
         for name, description in AgentRegistry.descriptions().items():
             print(f"- {name}: {description}")
         return
@@ -88,9 +110,26 @@ def main() -> None:
         return
 
     if args.list_tool_groups:
+        from agentic_system.agents.tool_registry import ToolRegistry
+
         for group_name, tools in ToolRegistry.list_groups().items():
             print(f"- {group_name}: {', '.join(tools)}")
         return
+
+    if args.list_prompt_versions or args.show_prompt_version or args.set_prompt_version:
+        settings = get_settings()
+        manager = PromptManager(settings.prompt_config_dir)
+        if args.set_prompt_version:
+            manager.set_active_version(args.set_prompt_version)
+            print(f"Active prompt version set to: {manager.get_active_version()}")
+            return
+        if args.list_prompt_versions:
+            for version in manager.list_versions():
+                print(f"- {version}")
+            return
+        if args.show_prompt_version:
+            print(manager.get_active_version())
+            return
 
     if args.show_graph:
         from agentic_system.orchestrator.graph import Orchestrator
@@ -125,6 +164,7 @@ def main() -> None:
                 trace_tools=args.trace_tools,
                 session_id=args.session_id,
                 plan_step_budget=args.plan_step_budget,
+                generate_ui=args.generate_ui,
             ):
                 event_type = payload.get("type")
                 if event_type == "token":
@@ -137,10 +177,13 @@ def main() -> None:
                     mode = payload.get("execution_mode", "")
                     reason = payload.get("execution_reason", "")
                     sid = payload.get("session_id", "")
+                    prompt_version = payload.get("prompt_version", "")
                     print(
                         f"\n\n[router] {route} (agent={agent}, mode={mode}, session={sid})",
                         flush=True,
                     )
+                    if prompt_version:
+                        print(f"[prompts] version={prompt_version}", flush=True)
                     if reason:
                         print(f"[strategy] {reason}", flush=True)
                 elif event_type == "plan":
@@ -152,6 +195,9 @@ def main() -> None:
                     title = payload.get("step_title", "")
                     content = payload.get("content", "")
                     print(f"\n[step] {title}\n{content}\n", flush=True)
+                elif event_type == "ui":
+                    print("\n[ui_payload]", flush=True)
+                    print(json.dumps(payload.get("payload", {}), indent=2), flush=True)
             print()
 
         asyncio.run(_run_stream())
@@ -161,9 +207,14 @@ def main() -> None:
         args.prompt,
         session_id=args.session_id,
         plan_step_budget=args.plan_step_budget,
+        generate_ui=args.generate_ui,
     )
     print(result["response"])
     print(f"\n[session_id] {result['session_id']}")
+    print(f"[prompt_version] {result.get('prompt_version', '')}")
+    if result.get("ui_spec"):
+        print("[ui_payload]")
+        print(json.dumps(result["ui_spec"], indent=2))
 
 
 if __name__ == "__main__":
