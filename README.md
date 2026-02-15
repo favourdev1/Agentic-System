@@ -31,6 +31,14 @@ agentic --stream --trace-tools "Summarize current system design and suggest next
 agentic --generate-ui "Summarize current system design and suggest next steps"
 ```
 
+Web chat UI (same API port):
+1. Start server: `agentic --server --host 0.0.0.0 --port 8000`
+2. Open: `http://127.0.0.1:8000/`
+3. Use the sidebar to edit URL and payload, then inspect:
+   - live stream events
+   - final text response
+   - rendered generative UI (cards/table/mixed)
+
 Use default mode for blocking responses, or `--stream` for token streaming.
 Use `--trace-tools` only if you want tool-status trace events during streaming.
 Use `--session-id` to continue a persisted session and `--plan-step-budget` to run only part of a plan.
