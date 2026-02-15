@@ -1,124 +1,136 @@
-# Agentic System Scaffold (LangChain + LangGraph + LangSmith)
+# 🤖 Repingme-Ai: Agentic System Scaffold
 
-This project is a standardized Python baseline for a multi-agent system with:
-- a central orchestrator
-- plan-aware execution strategy (`direct` vs `plan`)
-- class-based registries for agents and tools
-- reusable tool groups
-- LangSmith tracing
-- API-tool placeholders (URL configs can be added later)
+A high-performance, modular multi-agent system built with **LangChain**, **LangGraph**, and **FastAPI**. This scaffold provides a production-ready baseline for building intelligent agents with complex reasoning, automated planning, and rich generative UIs.
 
-## 1) Setup
+---
 
+## 🚀 Quick Start
+
+### 1. Prerequisites
+- Python 3.10+
+- [Anaconda](https://www.anaconda.com/) (Recommended) or `venv`
+
+### 2. Installation
 ```bash
+# Using venv
 python -m venv .venv
 source .venv/bin/activate
+
+# Install dependencies in editable mode
 pip install -e .
+
+# Configure environment
 cp .env.example .env
 ```
 
-Set at least:
-- `LLM_PROVIDER=gemini`
-- `GOOGLE_API_KEY`
-- `LANGSMITH_API_KEY` (if tracing enabled)
+### 3. Environment Configuration
+Edit your `.env` file and set the following critical variables:
+- `LLM_PROVIDER`: `gemini` (default) or `openai`
+- `GOOGLE_API_KEY`: Your Google AI Studio key
+- `LANGSMITH_API_KEY`: (Optional) For detailed trace auditing
+- `SESSION_STORE_DIR`: Where chat sessions are persisted (default: `.agentic_sessions`)
 
-## 2) Run
+---
 
-```bash
-agentic "Summarize current system design and suggest next steps"
-agentic --stream "Summarize current system design and suggest next steps"
-agentic --stream --trace-tools "Summarize current system design and suggest next steps"
-agentic --generate-ui "Summarize current system design and suggest next steps"
+## 🏗️ Project Structure
+
+The codebase follows a strictly modular "Brain" architecture:
+
+```text
+repingme-ai/
+├── src/agentic_system/
+│   ├── agents/             # Agent definitions & registration
+│   │   ├── common/         # Shared agent patterns
+│   │   └── registry.py     # Central Agent Registry [CRITICAL]
+│   ├── tools/              # Tool implementations
+│   │   ├── builders/       # Individual tool constructors
+│   │   ├── registry.py     # Central Tool Registry [CRITICAL]
+│   │   └── web/            # Scrapers and API adapters
+│   ├── orchestrator/       # The "Brain" (LangGraph Logic)
+│   │   ├── graph.py        # Logic Flow & Intent Routing
+│   │   └── llm_factory.py  # Model provider management
+│   ├── prompting/          # Versioned Prompt Management
+│   └── web/                # High-fidelity Agent Console (HTML/JS)
+├── prompts/                # Governance: Versioned JSON prompt packs
+└── .agentic_sessions/      # Persisted planning & memory state
 ```
 
-Web chat UI (same API port):
-1. Start server: `agentic --server --host 0.0.0.0 --port 8000`
-2. Open: `http://127.0.0.1:8000/`
-3. Use the sidebar to edit URL and payload, then inspect:
-   - live stream events
-   - final text response
-   - rendered generative UI (cards/table/mixed)
+---
 
-Use default mode for blocking responses, or `--stream` for token streaming.
-Use `--trace-tools` only if you want tool-status trace events during streaming.
-Use `--session-id` to continue a persisted session and `--plan-step-budget` to run only part of a plan.
-Use `--generate-ui` to attach structured render payloads (cards/table/mixed).
+## 🎮 How to Run
 
-## 2.1) API modes
+### Command Line Interface (CLI)
+```bash
+# Simple usage
+agentic "Help me plan a trip to Tokyo"
 
-`POST /api/invoke` supports both modes:
-- Blocking mode: `{ "prompt": "..." }`
-- Streaming mode (SSE): `{ "prompt": "...", "stream": true }`
-- Streaming with tool traces (SSE): `{ "prompt": "...", "stream": true, "trace_tools": true }`
-- Optional explicit routing in both modes: `{ "prompt": "...", "agent_id": "skill_enhancer" }`
-- Optional persistence controls: `{ "session_id": "existing-id", "plan_step_budget": 2 }`
-- Optional generative UI payload: `{ "generate_ui": true }` (returns `ui_spec` in blocking mode and `type: \"ui\"` event in streaming mode)
-- Responses include `prompt_version` for auditability.
+# Streaming mode with trace tools enabled
+agentic --stream --trace-tools "Search for the latest NVIDIA stock price"
 
-Execution behavior:
-- If `agent_id` is provided, orchestrator runs that agent directly (planning is bypassed).
-- Otherwise, orchestrator decides whether to execute directly or generate/execute a multi-step plan.
-- Session state (plan steps and completion status) is persisted in `SESSION_STORE_DIR` (default: `.agentic_sessions`).
+# Generate UI specs for frontend rendering
+agentic --generate-ui "Give me a comparison table of 3 electric cars"
+```
 
-## 2.2) Prompt Governance
+### Web Agent Console
+1. **Start the server**:
+   ```bash
+   agentic --server --port 8888 --reload
+   ```
+2. **Open your browser**: [http://127.0.0.1:8888](http://127.0.0.1:8888)
+3. **Features**:
+   - **Real-time Thought Trace**: Watch the AI's internal planning process.
+   - **Generative UI**: View cards, tables, and mixed media rendered by the AI.
+   - **Developer Tabs**: Inspect raw events, JSON payloads, and session params.
 
-Prompt packs are versioned on disk:
-- `prompts/versions/*.json`
-- `prompts/active_version.txt`
-- `prompts/CHANGELOG.md`
+---
 
-CLI governance commands:
+## 🛠️ Extending the System
+
+### 1. Adding a New Tool
+1. **Create Builder**: Add a new file in `src/agentic_system/tools/builders/` that returns a `StructuredTool`.
+2. **Register Tool**: Add your tool to the `_tools` map in `src/agentic_system/tools/registry.py`:
+   ```python
+   "my_tool": ToolSpec(name="my_tool", builder=build_my_tool)
+   ```
+3. **Group (Optional)**: Add it to a group in `_groups` to make it available to multiple agents.
+
+### 2. Creating a New Agent
+1. **Define Spec**: Open `src/agentic_system/agents/registry.py`.
+2. **Register**: Add a new `AgentSpec` to the `_agents` dictionary:
+   ```python
+   "content_writer": AgentSpec(
+       name="content_writer",
+       description="Expert at SEO writing",
+       system_prompt="You are an SEO expert...",
+       tool_groups=["core"]
+   )
+   ```
+3. **Routing**: The orchestrator will automatically pick up the new agent via semantic intent detection.
+
+---
+
+## 🧠 Core Concepts
+
+### Direct vs. Planning Mode
+- **Direct**: For simple queries, the system executes a single agent pass for speed.
+- **Planning**: For complex requests, the system generates a multi-step checklist, executes them sequentially, and synthesizes a final answer.
+
+### AI Thought Trace
+The UI includes a **Thought Process** trace that exposes the AI's internal reasoning. It handles:
+- `plan`: The interactive execution checklist.
+- `status`: Live pulse indicators during tool usage.
+- `step_result`: Updates on individual planning steps.
+
+### Prompt Governance
+Prompts are not hardcoded. They are versioned assets in `prompts/versions/`. Use the CLI to roll back or update prompt logic across all agents instantly:
 ```bash
 agentic --list-prompt-versions
-agentic --show-prompt-version
-agentic --set-prompt-version v1   # rollback example
-agentic --set-prompt-version v2   # move forward again
+agentic --set-prompt-version v2
 ```
 
-Environment controls:
-- `PROMPT_CONFIG_DIR` (default `prompts`)
-- `PROMPT_VERSION` (optional override; if set, it forces that version at runtime)
+---
 
-## 3) Explore registry + graph
-
-```bash
-agentic --list-agents
-agentic --list-tool-groups
-agentic --show-graph mermaid
-agentic --show-graph ascii
-agentic --show-graph mermaid --save-graph graph.mmd
-```
-
-## 4) Architecture
-
-- `src/agentic_system/orchestrator/graph.py`
-  - `Orchestrator` class owns routing, strategy decision, planning, execution, and graph rendering
-- `src/agentic_system/orchestrator/llm_factory.py`
-  - `LLMFactory` class for provider-specific model initialization (`gemini` or `openai`)
-- `src/agentic_system/agents/registry.py`
-  - `AgentRegistry` class + `AgentSpec`
-- `src/agentic_system/agents/tool_registry.py`
-  - `ToolRegistry` class + `ToolSpec` + tool groups
-- `src/agentic_system/tools/web/http_get.py`
-  - reusable HTTP API tool adapter (URL-ready)
-
-## 5) Add a new tool (standard way)
-
-1. Implement tool builder in `src/agentic_system/agents/*/builders/` (or `src/agentic_system/tools/` if shared)
-2. Register in `ToolRegistry._tools` in `src/agentic_system/agents/tool_registry.py`
-3. Optionally include it in `ToolRegistry._groups`
-4. Reference group/tool in an agent spec
-
-## 6) Add a new agent (standard way)
-
-1. Add `AgentSpec` in `AgentRegistry._agents` in `src/agentic_system/agents/registry.py`
-2. Set `name`, `description`, `system_prompt`
-3. Attach either `tool_groups=[...]`, `tool_names=[...]`, or both
-4. If needed, tune semantic routing logic in `Orchestrator._llm_router`
-
-## 7) API tools with URLs later
-
-Wire endpoint URLs/env vars into your web tool builders and register them in:
-- `src/agentic_system/agents/tool_registry.py`
-
-No orchestrator changes are required.
+## 🔒 Security & Safety
+- **State Persistence**: Sessions are saved to disk, allowing for long-running workflows to resume.
+- **ORM Strictness**: All database-related tools (if added) MUST use Laravel-style ORM patterns to avoid SQL injection.
+- **Prompt Safety**: Always use the system-governed prompt versions for production deployments.
