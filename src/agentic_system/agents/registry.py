@@ -26,61 +26,50 @@ class AgentSpec:
     tool_groups: list[str] = field(default_factory=list)
 
 
+import importlib
+import pkgutil
+from agentic_system.agents import definitions
+
+
 class AgentRegistry:
-    # Standardized agent registry. Add agents here.
-    _agents: dict[str, AgentSpec] = {
-        "general_assistant": AgentSpec(
-            name="general_assistant",
-            description="General-purpose assistant for broad tasks",
-            role="Information synthesis and general conversational assistance.",
-            boundary="Should not handle complex financial data or multi-step analysis without explicitly planning.",
-            system_prompt=(
-                "You are a reliable general assistant. "
-                "Use tools when they materially improve correctness. "
-                "Be concise and actionable."
-            ),
-            tool_groups=["core"],
-        ),
-        "analysis_assistant": AgentSpec(
-            name="analysis_assistant",
-            description="Analytical assistant for structured reasoning and decomposition",
-            role="Deep-dive analysis, financial data querying, and multi-step reasoning.",
-            boundary="Avoid broad creative writing; focus strictly on evidence-based synthesis of tool results.",
-            system_prompt=(
-                "You are an analytical assistant. "
-                "Break tasks into steps, validate assumptions, and return clear conclusions."
-            ),
-            tool_groups=["analysis_plus_api"],
-        ),
-        "skill_enhancer": AgentSpec(
-            name="skill_enhancer",
-            description="Expert at expanding and refining AI skill instructions",
-            role="Meta-prompt engineering and instruction refinement.",
-            boundary="Should not execute general tasks or access external APIs beyond core tools.",
-            system_prompt=(
-                "You are an expert prompt engineer. Your task is to take a brief description of an AI skill "
-                "and expand it into a comprehensive set of professional instructions. "
-                "You should include: "
-                "1. A clear personality description. "
-                "2. The Do's: specific behaviors and styles to adopt. "
-                "3. The Dont's: specific edge cases or behaviors to avoid. "
-                "4. Step-by-step logic if applicable. "
-                "Format the output as a clean, actionable professional instruction set."
-            ),
-            tool_groups=["core"],
-        ),
-    }
+    """Central registry that dynamically discovers agents in the 'definitions' package."""
+
+    _cached_agents: dict[str, AgentSpec] | None = None
+
+    @classmethod
+    def _discover_agents(cls) -> dict[str, AgentSpec]:
+        if cls._cached_agents is not None:
+            return cls._cached_agents
+
+        agents = {}
+        # Iterate through all modules in the 'definitions' package
+        for _, name, is_pkg in pkgutil.iter_modules(definitions.__path__):
+            if is_pkg:
+                continue
+
+            # Import the module dynamically
+            module_name = f"agentic_system.agents.definitions.{name}"
+            module = importlib.import_module(module_name)
+
+            # Look for an 'agent' attribute that is an AgentSpec
+            agent_spec = getattr(module, "agent", None)
+            if isinstance(agent_spec, AgentSpec):
+                agents[agent_spec.name] = agent_spec
+
+        cls._cached_agents = agents
+        return agents
 
     @classmethod
     def list_agents(cls) -> list[AgentSpec]:
-        return list(cls._agents.values())
+        return list(cls._discover_agents().values())
 
     @classmethod
     def get_agent(cls, name: str) -> AgentSpec:
-        if name not in cls._agents:
+        agents = cls._discover_agents()
+        if name not in agents:
             raise ValueError(f"Unknown agent: {name}")
-        return cls._agents[name]
+        return agents[name]
 
     @classmethod
     def descriptions(cls) -> dict[str, str]:
-        return {name: spec.description for name, spec in cls._agents.items()}
+        return {name: spec.description for name, spec in cls._discover_agents().items()}
