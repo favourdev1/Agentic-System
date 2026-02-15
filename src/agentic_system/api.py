@@ -36,10 +36,15 @@ class InvokeRequest(BaseModel):
     stream: bool = False
     trace_tools: bool = False
     agent_id: str | None = None
+    session_id: str | None = None
+    plan_step_budget: int | None = None
 
 
 class InvokeResponse(BaseModel):
     response: str
+    session_id: str
+    execution_mode: str | None = None
+    selected_agent: str | None = None
 
 
 class EnhanceSkillRequest(BaseModel):
@@ -63,6 +68,8 @@ async def invoke_agent(request: InvokeRequest):
                         request.prompt,
                         agent_id=request.agent_id,
                         trace_tools=request.trace_tools,
+                        session_id=request.session_id,
+                        plan_step_budget=request.plan_step_budget,
                     ):
                         yield f"data: {json.dumps(payload)}\n\n"
                     yield 'data: {"type":"done"}\n\n'
@@ -80,8 +87,18 @@ async def invoke_agent(request: InvokeRequest):
                 },
             )
 
-        result = orchestrator.invoke(request.prompt, agent_id=request.agent_id)
-        return InvokeResponse(response=result)
+        result = orchestrator.invoke_with_metadata(
+            request.prompt,
+            agent_id=request.agent_id,
+            session_id=request.session_id,
+            plan_step_budget=request.plan_step_budget,
+        )
+        return InvokeResponse(
+            response=result["response"],
+            session_id=result["session_id"],
+            execution_mode=result.get("execution_mode"),
+            selected_agent=result.get("selected_agent"),
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -91,8 +108,13 @@ async def enhance_skill(request: EnhanceSkillRequest):
     try:
         # Explicitly target the skill_enhancer agent with both title and description
         prompt = f"Skill Title: {request.title}\nDescription: {request.description}"
-        result = orchestrator.invoke(prompt, agent_id="skill_enhancer")
-        return InvokeResponse(response=result)
+        result = orchestrator.invoke_with_metadata(prompt, agent_id="skill_enhancer")
+        return InvokeResponse(
+            response=result["response"],
+            session_id=result["session_id"],
+            execution_mode=result.get("execution_mode"),
+            selected_agent=result.get("selected_agent"),
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
