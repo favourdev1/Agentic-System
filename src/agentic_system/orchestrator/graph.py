@@ -14,7 +14,7 @@ from agentic_system.orchestrator.llm_factory import LLMFactory
 from agentic_system.orchestrator.state import OrchestratorState
 from agentic_system.orchestrator.ui_models import UiSpec
 from agentic_system.prompting import PromptManager
-from agentic_system.session_store import FileSessionStore
+from agentic_system.session_store import build_session_store
 from agentic_system.tools.registry import ToolRegistry
 
 
@@ -152,7 +152,7 @@ class Orchestrator:
     def __init__(self) -> None:
         self._app = self._build_graph()
         settings = get_settings()
-        self._store = FileSessionStore(settings.session_store_dir)
+        self._store = build_session_store()
         self._prompts = PromptManager(
             settings.prompt_config_dir,
             version_override=settings.prompt_version or None,

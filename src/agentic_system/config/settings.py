@@ -42,6 +42,24 @@ class Settings(BaseSettings):
         default=".agentic_sessions",
         alias="SESSION_STORE_DIR",
     )
+    session_store_backend: str = Field(
+        default="file",
+        alias="SESSION_STORE_BACKEND",
+    )
+
+    # Database configuration
+    database_url: str = Field(
+        default="sqlite:///./agentic_system.db",
+        alias="DATABASE_URL",
+    )
+    database_echo: bool = Field(
+        default=False,
+        alias="DATABASE_ECHO",
+    )
+    database_auto_migrate: bool = Field(
+        default=True,
+        alias="DATABASE_AUTO_MIGRATE",
+    )
 
     # Prompt governance
     prompt_config_dir: str = Field(

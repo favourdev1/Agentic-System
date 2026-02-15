@@ -28,7 +28,9 @@ Edit your `.env` file and set the following critical variables:
 - `LLM_PROVIDER`: `gemini` (default) or `openai`
 - `GOOGLE_API_KEY`: Your Google AI Studio key
 - `LANGSMITH_API_KEY`: (Optional) For detailed trace auditing
-- `SESSION_STORE_DIR`: Where chat sessions are persisted (default: `.agentic_sessions`)
+- `SESSION_STORE_BACKEND`: `file` (default) or `db`
+- `SESSION_STORE_DIR`: File store directory when backend is `file`
+- `DATABASE_URL`: SQLAlchemy URL when backend is `db` (default: `sqlite:///./agentic_system.db`)
 
 ---
 
@@ -40,19 +42,23 @@ The codebase follows a strictly modular "Brain" architecture:
 agentic-system/
 ├── src/agentic_system/
 │   ├── agents/             # Agent definitions & registration
-│   │   ├── common/         # Shared agent patterns
 │   │   └── registry.py     # Central Agent Registry [CRITICAL]
-│   ├── tools/              # Tool implementations
-│   │   ├── builders/       # Individual tool constructors
-│   │   ├── registry.py     # Central Tool Registry [CRITICAL]
-│   │   └── web/            # Scrapers and API adapters
+│   ├── config/             # Environment + database config resolution
+│   ├── database/           # Engine/session/base/init (runtime DB infra)
+│   ├── models/             # SQLAlchemy models
+│   ├── session_store/      # Pluggable session backends (file/db)
+│   ├── tools/
+│   │   ├── builders/       # Tool composition/builders
+│   │   ├── tool_factory/   # Concrete tool implementations
+│   │   └── registry.py     # Central Tool Registry [CRITICAL]
 │   ├── orchestrator/       # The "Brain" (LangGraph Logic)
 │   │   ├── graph.py        # Logic Flow & Intent Routing
 │   │   └── llm_factory.py  # Model provider management
 │   ├── prompting/          # Versioned Prompt Management
 │   └── web/                # High-fidelity Agent Console (HTML/JS)
 ├── prompts/                # Governance: Versioned JSON prompt packs
-└── .agentic_sessions/      # Persisted planning & memory state
+├── migrations/             # Alembic migrations
+└── .agentic_sessions/      # File backend session state
 ```
 
 ---
@@ -82,17 +88,27 @@ agentic --generate-ui "Give me a comparison table of 3 electric cars"
    - **Generative UI**: View cards, tables, and mixed media rendered by the AI.
    - **Developer Tabs**: Inspect raw events, JSON payloads, and session params.
 
+### Database Migrations (DB Backend)
+```bash
+# Switch to DB session persistence
+export SESSION_STORE_BACKEND=db
+
+# Run schema migration
+alembic upgrade head
+```
+
 ---
 
 ## 🛠️ Extending the System
 
 ### 1. Adding a New Tool
-1. **Create Builder**: Add a new file in `src/agentic_system/tools/builders/` that returns a `StructuredTool`.
-2. **Register Tool**: Add your tool to the `_tools` map in `src/agentic_system/tools/registry.py`:
+1. **Create Tool**: Add concrete tool code in `src/agentic_system/tools/tool_factory/`.
+2. **Create Builder**: Add a builder in `src/agentic_system/tools/builders/` that returns a `StructuredTool`.
+3. **Register Tool**: Add your tool to the `_tools` map in `src/agentic_system/tools/registry.py`:
    ```python
    "my_tool": ToolSpec(name="my_tool", builder=build_my_tool)
    ```
-3. **Group (Optional)**: Add it to a group in `_groups` to make it available to multiple agents.
+4. **Group (Optional)**: Add it to a group in `_groups` to make it available to multiple agents.
 
 ### 2. Creating a New Agent
 1. **Define Spec**: Open `src/agentic_system/agents/registry.py`.
@@ -131,6 +147,6 @@ agentic --set-prompt-version v2
 ---
 
 ## 🔒 Security & Safety
-- **State Persistence**: Sessions are saved to disk, allowing for long-running workflows to resume.
+- **State Persistence**: Sessions can be persisted via file store or database backend.
 - **ORM Strictness**: All database-related tools (if added) MUST use Laravel-style ORM patterns to avoid SQL injection.
 - **Prompt Safety**: Always use the system-governed prompt versions for production deployments.
