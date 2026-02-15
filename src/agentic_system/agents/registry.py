@@ -5,8 +5,22 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class AgentSpec:
+    """Formal specification for an AI agent.
+
+    Attributes:
+        name: Unique ID of the agent.
+        description: High-level summary used for semantic routing.
+        role: Formal operational definition of the agent's persona.
+        boundary: Explicit constraints on what the agent should NOT do.
+        system_prompt: The actual instruction set used by the LLM.
+        tool_names: Explicit tool IDs assigned to this agent.
+        tool_groups: Pre-defined group IDs assigned to this agent.
+    """
+
     name: str
     description: str
+    role: str
+    boundary: str
     system_prompt: str
     tool_names: list[str] = field(default_factory=list)
     tool_groups: list[str] = field(default_factory=list)
@@ -18,6 +32,8 @@ class AgentRegistry:
         "general_assistant": AgentSpec(
             name="general_assistant",
             description="General-purpose assistant for broad tasks",
+            role="Information synthesis and general conversational assistance.",
+            boundary="Should not handle complex financial data or multi-step analysis without explicitly planning.",
             system_prompt=(
                 "You are a reliable general assistant. "
                 "Use tools when they materially improve correctness. "
@@ -28,6 +44,8 @@ class AgentRegistry:
         "analysis_assistant": AgentSpec(
             name="analysis_assistant",
             description="Analytical assistant for structured reasoning and decomposition",
+            role="Deep-dive analysis, financial data querying, and multi-step reasoning.",
+            boundary="Avoid broad creative writing; focus strictly on evidence-based synthesis of tool results.",
             system_prompt=(
                 "You are an analytical assistant. "
                 "Break tasks into steps, validate assumptions, and return clear conclusions."
@@ -37,6 +55,8 @@ class AgentRegistry:
         "skill_enhancer": AgentSpec(
             name="skill_enhancer",
             description="Expert at expanding and refining AI skill instructions",
+            role="Meta-prompt engineering and instruction refinement.",
+            boundary="Should not execute general tasks or access external APIs beyond core tools.",
             system_prompt=(
                 "You are an expert prompt engineer. Your task is to take a brief description of an AI skill "
                 "and expand it into a comprehensive set of professional instructions. "

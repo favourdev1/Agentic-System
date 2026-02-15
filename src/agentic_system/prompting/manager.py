@@ -7,9 +7,22 @@ from typing import Any
 
 
 class PromptManager:
-    """Loads versioned prompt packs and supports safe rollback by version switch."""
+    """Central manager for versioned prompt governance.
+
+    The PromptManager handles:
+    - Loading prompt packs from disk-based JSON versions.
+    - Determining the 'Active' version (via file or environment override).
+    - Safe string formatting that preserves unresolved placeholders.
+    - Enabling atomic rollbacks between prompt versions.
+    """
 
     def __init__(self, base_dir: str, version_override: str | None = None) -> None:
+        """Initializes the manager with a base configuration directory.
+
+        Args:
+            base_dir: Directory containing 'versions/' and 'active_version.txt'.
+            version_override: Optional forced version (e.g. from environment).
+        """
         self._base = Path(base_dir)
         self._versions_dir = self._base / "versions"
         self._active_file = self._base / "active_version.txt"
@@ -18,7 +31,9 @@ class PromptManager:
 
     def _ensure_layout(self) -> None:
         if not self._versions_dir.exists():
-            raise FileNotFoundError(f"Prompt versions directory not found: {self._versions_dir}")
+            raise FileNotFoundError(
+                f"Prompt versions directory not found: {self._versions_dir}"
+            )
 
     def list_versions(self) -> list[str]:
         self._ensure_layout()
@@ -67,7 +82,9 @@ class PromptManager:
         # Keep unresolved placeholders as-is to avoid runtime crashes from missing optional fields.
         formatter = Formatter()
         out: list[str] = []
-        for literal_text, field_name, format_spec, conversion in formatter.parse(template):
+        for literal_text, field_name, format_spec, conversion in formatter.parse(
+            template
+        ):
             out.append(literal_text)
             if field_name is None:
                 continue
@@ -88,5 +105,7 @@ class PromptManager:
             raise KeyError(f"Prompt key '{key}' not found in version '{version}'")
         template = prompts[key]
         if not isinstance(template, str):
-            raise TypeError(f"Prompt key '{key}' in version '{version}' must be a string")
+            raise TypeError(
+                f"Prompt key '{key}' in version '{version}' must be a string"
+            )
         return self._safe_format(template, variables)

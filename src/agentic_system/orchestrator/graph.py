@@ -32,7 +32,9 @@ class ExecutionDecision(BaseModel):
 
 class PlanStep(BaseModel):
     title: str = Field(description="Short step title")
-    instruction: str = Field(description="Actionable instruction for the selected agent")
+    instruction: str = Field(
+        description="Actionable instruction for the selected agent"
+    )
     success_criteria: str = Field(description="Observable completion criteria")
 
 
@@ -42,13 +44,25 @@ class ExecutionPlan(BaseModel):
 
 
 class StreamProcessor:
+    """Manages the translation of LangGraph/LangChain events into user-facing stream updates.
+
+    The processor enforces a formal Trace Lifecycle:
+    1. 'status': Real-time operational updates (reasoning, tool starts/ends).
+    2. 'token': Incremental content generation (partial model outputs).
+    3. 'metadata': Final trace information and session context.
+    4. 'plan' & 'step_result': Specialized events for multi-step execution.
+    """
+
     def __init__(self) -> None:
         self.streamed_any = False
         self.final_output_text = ""
+        # Map internal tool IDs to human-readable status messages.
         self._tool_map = {
             "calculator": "Consulting the calculator...",
             "bank_account_api": "Checking bank records...",
             "external_search_api": "Searching external data...",
+            "web_search": "Searching Google...",
+            "web_scrape": "Reading page content...",
         }
 
     @classmethod
@@ -86,8 +100,17 @@ class StreamProcessor:
         return cls.chunk_to_text(messages[-1])
 
     def process_event(self, event: dict[str, Any]) -> dict[str, Any] | None:
+        """Formal event handler for LangChain 'astream_events'.
+
+        Args:
+            event: The raw event dict from the runtime.
+
+        Returns:
+            A normalized payload dict if the event matches the trace lifecycle, else None.
+        """
         event_type = event.get("event")
 
+        # Lifecycle Phase: Content Generation
         if event_type == "on_chat_model_stream":
             chunk = event.get("data", {}).get("chunk")
             text = self.chunk_to_text(chunk)
@@ -95,6 +118,7 @@ class StreamProcessor:
                 self.streamed_any = True
                 return {"type": "token", "content": text}
 
+        # Lifecycle Phase: Tool Operations (Trace Triggers)
         if event_type == "on_tool_start":
             tool_name = event.get("name", "tool")
             msg = self._tool_map.get(tool_name, f"Using {tool_name}...")
@@ -104,6 +128,7 @@ class StreamProcessor:
             tool_name = event.get("name", "tool")
             return {"type": "status", "content": f"Finished using {tool_name}."}
 
+        # Lifecycle Phase: Synthesis
         if event_type == "on_chain_end":
             output = event.get("data", {}).get("output")
             text = self._extract_output_text(output)
@@ -114,6 +139,16 @@ class StreamProcessor:
 
 
 class Orchestrator:
+    """The central intelligence hub of the Agentic System.
+
+    The Orchestrator manages the end-to-end lifecycle of a user request:
+    1. Governance: Loads versioned prompts and manages session persistence.
+    2. Intent Routing: Selects the optimal agent via the LLM Router.
+    3. Strategy Selection: Decides between 'Direct' or 'Plan' execution.
+    4. Execution: Runs the selected agent or executes a multi-step plan.
+    5. Post-processing: Optionally generates UI payloads.
+    """
+
     def __init__(self) -> None:
         self._app = self._build_graph()
         settings = get_settings()
@@ -125,9 +160,15 @@ class Orchestrator:
 
     @staticmethod
     def _safe_agent_id(candidate: str) -> str:
-        return candidate if candidate in AgentRegistry.descriptions() else "general_assistant"
+        return (
+            candidate
+            if candidate in AgentRegistry.descriptions()
+            else "general_assistant"
+        )
 
-    def _prepare_session(self, session_id: str | None) -> tuple[str, str, dict[str, Any]]:
+    def _prepare_session(
+        self, session_id: str | None
+    ) -> tuple[str, str, dict[str, Any]]:
         record = self._store.get_or_create(session_id)
         sid = record["session_id"]
         context = self._store.build_context(record)
@@ -214,7 +255,9 @@ class Orchestrator:
                     success_criteria="A complete and accurate response is produced.",
                 )
             ]
-        return ExecutionPlan(objective=plan.objective or user_input, steps=normalized_steps)
+        return ExecutionPlan(
+            objective=plan.objective or user_input, steps=normalized_steps
+        )
 
     def _build_ui_spec(self, user_input: str, response_text: str) -> UiSpec | None:
         # UI generation is optional and runs as a post-processing pass over the final text response.
@@ -344,7 +387,10 @@ class Orchestrator:
                 break
 
             previous = "\n".join(
-                [f"{i+1}. {item['title']}: {item['result']}" for i, item in enumerate(completed)]
+                [
+                    f"{i+1}. {item['title']}: {item['result']}"
+                    for i, item in enumerate(completed)
+                ]
             )
             step_prompt = self._prompts.get_prompt(
                 "step_user",
@@ -434,9 +480,7 @@ class Orchestrator:
         execution_mode = state.get("execution_mode", "direct")
         execution_reason = state.get("execution_reason", "")
 
-        suffix = (
-            f"(router: {route_reason}; mode: {execution_mode}; reason: {execution_reason}; agent: {selected})"
-        )
+        suffix = f"(router: {route_reason}; mode: {execution_mode}; reason: {execution_reason}; agent: {selected})"
         return {"response": f"{response}\n\n{suffix}"}
 
     def _build_graph(self):
@@ -616,7 +660,9 @@ class Orchestrator:
             selected_agent = self._safe_agent_id(agent_id)
             route_reason = f"Explicitly targeted: {selected_agent}"
         else:
-            router_result = self._llm_router(user_input, session_context=session_context)
+            router_result = self._llm_router(
+                user_input, session_context=session_context
+            )
             selected_agent = router_result.selected_agent
             route_reason = f"LLM Routing: {router_result.reasoning}"
 
@@ -688,7 +734,9 @@ class Orchestrator:
                 yield {"type": "ui", "payload": ui_spec.model_dump()}
             return
 
-        plan = self._build_plan(user_input, selected_agent, session_context=session_context)
+        plan = self._build_plan(
+            user_input, selected_agent, session_context=session_context
+        )
         plan_payload = {
             "type": "plan",
             "objective": plan.objective,
@@ -720,7 +768,10 @@ class Orchestrator:
             }
 
             completed_context = "\n".join(
-                [f"{i+1}. {item['title']}: {item['result']}" for i, item in enumerate(completed)]
+                [
+                    f"{i+1}. {item['title']}: {item['result']}"
+                    for i, item in enumerate(completed)
+                ]
             )
             step_prompt = self._prompts.get_prompt(
                 "step_user",
@@ -731,7 +782,9 @@ class Orchestrator:
                 step_title=step.title,
                 step_instruction=step.instruction,
                 step_success_criteria=step.success_criteria,
-                completed_context=completed_context if completed_context else "None yet",
+                completed_context=(
+                    completed_context if completed_context else "None yet"
+                ),
             )
 
             try:
@@ -822,7 +875,9 @@ class Orchestrator:
             "prompt_version": self._prompts.get_active_version(),
         }
         if generate_ui:
-            ui_spec = self._build_ui_spec(user_input=user_input, response_text=final_text)
+            ui_spec = self._build_ui_spec(
+                user_input=user_input, response_text=final_text
+            )
             if ui_spec:
                 yield {"type": "ui", "payload": ui_spec.model_dump()}
 
