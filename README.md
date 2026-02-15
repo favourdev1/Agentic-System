@@ -1,4 +1,4 @@
-# 🤖 Repingme-Ai: Agentic System Scaffold
+# 🤖 Agentic-system: Agentic System Scaffold
 
 A high-performance, modular multi-agent system built with **LangChain**, **LangGraph**, and **FastAPI**. This scaffold provides a production-ready baseline for building intelligent agents with complex reasoning, automated planning, and rich generative UIs.
 
@@ -37,7 +37,7 @@ Edit your `.env` file and set the following critical variables:
 The codebase follows a strictly modular "Brain" architecture:
 
 ```text
-repingme-ai/
+agentic-system/
 ├── src/agentic_system/
 │   ├── agents/             # Agent definitions & registration
 │   │   ├── common/         # Shared agent patterns
