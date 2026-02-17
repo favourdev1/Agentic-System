@@ -96,23 +96,37 @@ def main() -> None:
     make_agent_parser.add_argument("name", help="Name of the new agent")
     make_agent_parser.add_argument("--role", help="Formal role definition")
     make_agent_parser.add_argument(
+        "--backstory", help="Narrative context that shapes the agent behavior"
+    )
+    make_agent_parser.add_argument(
+        "--goal",
+        action="append",
+        help="Agent goal. Repeat flag to add multiple goals.",
+    )
+    make_agent_parser.add_argument(
         "--boundary", help="Explicit operational constraints"
     )
     make_agent_parser.add_argument(
         "--description", help="High-level summary for routing"
     )
 
-    make_tool_parser = subparsers.add_parser("make:tool", help="Generate a new tool")
-    make_tool_parser.add_argument("name", help="Name of the new tool")
-    make_tool_parser.add_argument("--intent", help="Formal intent definition")
-    make_tool_parser.add_argument("--schema-notes", help="Notes on input/output schema")
-    make_tool_parser.add_argument(
-        "--groups", nargs="+", help="Groups to assign this tool to"
-    )
-
-    # Compatibility: If no command is provided but there are arguments, assume 'chat'
+    # Legacy Shim: Map old-style flags to new subcommands for backward compatibility.
     import sys
 
+    processed_argv = []
+    i = 0
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == "--server" and "server" not in sys.argv:
+            processed_argv.append("server")
+        elif arg == "--chat" and "chat" not in sys.argv:
+            processed_argv.append("chat")
+        else:
+            processed_argv.append(arg)
+        i += 1
+    sys.argv = processed_argv
+
+    # Compatibility: If no command is provided but there are arguments, assume 'chat'
     if (
         len(sys.argv) > 1
         and sys.argv[1] not in subparsers.choices

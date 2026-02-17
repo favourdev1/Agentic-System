@@ -352,7 +352,7 @@ class Orchestrator:
         result = worker.invoke(
             {
                 "messages": [
-                    SystemMessage(content=spec.system_prompt),
+                    SystemMessage(content=spec.runtime_system_prompt()),
                     HumanMessage(content=state["user_input"]),
                 ]
             }
@@ -408,7 +408,7 @@ class Orchestrator:
                 step_result = worker.invoke(
                     {
                         "messages": [
-                            SystemMessage(content=spec.system_prompt),
+                            SystemMessage(content=spec.runtime_system_prompt()),
                             HumanMessage(content=step_prompt),
                         ]
                     }
@@ -437,7 +437,7 @@ class Orchestrator:
             final_result = worker.invoke(
                 {
                     "messages": [
-                        SystemMessage(content=spec.system_prompt),
+                        SystemMessage(content=spec.runtime_system_prompt()),
                         HumanMessage(content=synthesis_prompt),
                     ]
                 }
@@ -691,7 +691,7 @@ class Orchestrator:
             streamed_text_parts: list[str] = []
             async for payload in self._stream_worker_events(
                 worker=worker,
-                system_prompt=spec.system_prompt,
+                system_prompt=spec.runtime_system_prompt(),
                 user_prompt=user_input,
                 trace_tools=trace_tools,
             ):
@@ -791,7 +791,7 @@ class Orchestrator:
                 result = worker.invoke(
                     {
                         "messages": [
-                            SystemMessage(content=spec.system_prompt),
+                            SystemMessage(content=spec.runtime_system_prompt()),
                             HumanMessage(content=step_prompt),
                         ]
                     }
@@ -829,7 +829,7 @@ class Orchestrator:
             final_result = worker.invoke(
                 {
                     "messages": [
-                        SystemMessage(content=spec.system_prompt),
+                        SystemMessage(content=spec.runtime_system_prompt()),
                         HumanMessage(content=synthesis_prompt),
                     ]
                 }

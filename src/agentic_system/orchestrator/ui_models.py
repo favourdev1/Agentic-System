@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Union
 
 from pydantic import BaseModel, Field
 
@@ -19,10 +19,15 @@ class UiTable(BaseModel):
     rows: list[list[str]] = Field(default_factory=list)
 
 
+class UiElement(BaseModel):
+    # A single UI block that can be sequenced in any order.
+    type: Literal["text", "table", "cards"]
+    content: str | UiTable | list[UiCard]
+
+
 class UiSpec(BaseModel):
-    # High-level UI payload your frontend can render directly.
-    layout: Literal["none", "cards", "table", "mixed"] = "none"
+    # Ordered list of UI elements for dynamic layout.
+    elements: list[UiElement] = Field(default_factory=list)
     summary: str = Field(default="")
-    cards: list[UiCard] = Field(default_factory=list)
-    table: UiTable | None = None
+    layout: Literal["none", "cards", "table", "mixed", "blocks"] = "blocks"
     notes: list[str] = Field(default_factory=list)

@@ -259,7 +259,13 @@ agentic prompts --set v2
 
 ### Scaffolding commands
 ```bash
-agentic make:agent market_analyst --role "Financial analyst" --boundary "No legal advice" --description "Market intelligence specialist"
+agentic make:agent market_analyst \
+  --description "Market intelligence specialist" \
+  --role "Financial analyst" \
+  --backstory "Former buy-side analyst focused on evidence-driven recommendations." \
+  --goal "Produce risk-aware market summaries." \
+  --goal "Clearly separate facts from assumptions." \
+  --boundary "No legal or regulated financial advice"
 agentic make:tool fx_rates --intent "Retrieve exchange rates" --schema-notes "query:string -> json" --groups core analysis_plus_api
 ```
 
@@ -397,6 +403,8 @@ Agent schema fields:
 - `name`
 - `description`
 - `role`
+- `backstory`
+- `goals` (list)
 - `boundary`
 - `system_prompt`
 - `tool_names`
