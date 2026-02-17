@@ -7,7 +7,7 @@ from agentic_system.config.settings import get_settings
 
 class LLMFactory:
     @staticmethod
-    def create_chat_model() -> BaseChatModel:
+    def create_chat_model(streaming: bool = False) -> BaseChatModel:
         settings = get_settings()
         provider = settings.llm_provider.strip().lower()
 
@@ -17,6 +17,7 @@ class LLMFactory:
             return ChatGoogleGenerativeAI(
                 model=settings.gemini_model,
                 google_api_key=settings.google_api_key,
+                streaming=streaming,
             )
 
         if provider == "openai":
@@ -25,6 +26,7 @@ class LLMFactory:
             return ChatOpenAI(
                 model=settings.openai_model,
                 api_key=settings.openai_api_key,
+                streaming=streaming,
             )
 
         raise ValueError("Unsupported LLM_PROVIDER. Use 'gemini' or 'openai'.")

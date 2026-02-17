@@ -272,8 +272,8 @@ class Orchestrator:
         return ui
 
     @staticmethod
-    def _build_worker(spec: AgentSpec):
-        llm = LLMFactory.create_chat_model()
+    def _build_worker(spec: AgentSpec, streaming: bool = False):
+        llm = LLMFactory.create_chat_model(streaming=streaming)
         tools = ToolRegistry.get_tools(spec.tool_names, spec.tool_groups)
         return create_react_agent(llm, tools)
 
@@ -340,7 +340,7 @@ class Orchestrator:
 
     def agent_node(self, state: OrchestratorState) -> OrchestratorState:
         spec = AgentRegistry.get_agent(state["selected_agent"])
-        worker = self._build_worker(spec)
+        worker = self._build_worker(spec, streaming=False)
         result = worker.invoke(
             {
                 "messages": [
@@ -357,7 +357,7 @@ class Orchestrator:
 
     def execute_plan_node(self, state: OrchestratorState) -> OrchestratorState:
         spec = AgentRegistry.get_agent(state["selected_agent"])
-        worker = self._build_worker(spec)
+        worker = self._build_worker(spec, streaming=False)
 
         plan_steps = state.get("plan_steps", [])
         budget = max(1, int(state.get("plan_step_budget") or len(plan_steps)))
@@ -677,7 +677,7 @@ class Orchestrator:
         }
 
         spec = AgentRegistry.get_agent(selected_agent)
-        worker = self._build_worker(spec)
+        worker = self._build_worker(spec, streaming=True)
 
         if decision.mode == "direct":
             streamed_text_parts: list[str] = []
