@@ -16,7 +16,7 @@ def build_external_search_api():
 
 def build_bank_account_api():
     """Build the bank account API tool with semantic usage guidance for the agent."""
-    base_url = settings.bank_api_base_url
+    base_url = f"{settings.api_base_url}/bank-account/request"
     headers = {}
 
     if settings.bank_api_auth_token:
