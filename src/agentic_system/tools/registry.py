@@ -3,6 +3,7 @@ import pkgutil
 from typing import Any
 
 from agentic_system.tools import definitions
+from agentic_system.tools.groups import TOOL_GROUPS
 from agentic_system.tools.tool_models import ToolSpec
 
 
@@ -41,14 +42,8 @@ class ToolRegistry:
 
     @classmethod
     def _get_dynamic_groups(cls) -> dict[str, list[str]]:
-        """Builds tool groups dynamically from discovered tool specifications."""
-        groups = {}
-        for tool_spec in cls._discover_tools().values():
-            for group_name in tool_spec.groups:
-                if group_name not in groups:
-                    groups[group_name] = []
-                groups[group_name].append(tool_spec.name)
-        return groups
+        """Returns tool groups defined in the central groups configuration."""
+        return TOOL_GROUPS
 
     @classmethod
     def resolve_tool_names(

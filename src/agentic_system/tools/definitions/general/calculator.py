@@ -35,5 +35,4 @@ tool = ToolSpec(
     builder=build_calculator,
     intent="Execute mathematical computations for absolute precision.",
     schema_notes="Expects 'expression' string. Returns numerical result.",
-    groups=["core", "analysis_plus_api"],
 )

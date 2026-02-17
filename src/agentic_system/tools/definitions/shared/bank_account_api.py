@@ -59,5 +59,4 @@ tool = ToolSpec(
     builder=build_bank_account_api,
     intent="Access and filter internal bank transaction records.",
     schema_notes="Requires optional 'params' dict (bank_name, status, search, date range).",
-    groups=["analysis_plus_api"],
 )

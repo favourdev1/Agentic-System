@@ -46,5 +46,4 @@ tool = ToolSpec(
     builder=build_web_scrape,
     intent="Extract deep-text context from specific URLs identified during search.",
     schema_notes="Takes 'url' string. Returns clean markdown-ready text.",
-    groups=["core", "analysis_plus_api"],
 )

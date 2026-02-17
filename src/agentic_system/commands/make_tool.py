@@ -53,23 +53,20 @@ from agentic_system.tools.tool_models import ToolSpec
 #
 # schema_notes:  Instructional notes for the LLM on input/output logic.
 #                Example: "Always returns a list of JSON objects."
-#
-# groups:        Predefined tool sets this tool belongs to.
-#                Example: ["research", "travel", "core"]
 #================================================================
 
 class {name.title().replace('_', '')}Input(BaseModel):
     query: str = Field(description="Search or action query")
 
 def build_{name}_tool() -> StructuredTool:
-    def run(query: str) -> str:
+    def __run(query: str) -> str:
         # TODO: Implement tool logic
         return f"Tool {name} executed with query: {{query}}"
 
     return StructuredTool.from_function(
         name="{name}",
         description="{intent}",
-        func=run,
+        func=__run,
         args_schema={name.title().replace('_', '')}Input,
     )
 
@@ -81,7 +78,6 @@ tool = ToolSpec(
     builder      = build_{name},
     intent       = "{intent}",
     schema_notes = "{schema_notes}",
-    groups       = {groups_repr},
 )
 """
 
@@ -101,3 +97,6 @@ tool = ToolSpec(
     print(f"✅ Successfully created tool file: {name}.py")
     print(f"📂 Tool path: tools/definitions/{target_subpath.as_posix()}")
     print(f"📍 Location: {tool_file}")
+    print(
+        f"\n💡 NEXT STEP: Manually register '{name}' in src/agentic_system/tools/groups.py"
+    )

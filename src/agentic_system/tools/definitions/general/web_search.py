@@ -77,5 +77,4 @@ tool = ToolSpec(
     builder=build_web_search,
     intent="Discover relevant real-time information from the open web.",
     schema_notes="Takes 'query' string. Returns top-K snippets or URLs.",
-    groups=["core", "analysis_plus_api"],
 )
