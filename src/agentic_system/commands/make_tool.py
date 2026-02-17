@@ -4,6 +4,32 @@ import argparse
 from pathlib import Path
 
 
+def _normalize_tool_path(path: str) -> Path:
+    # Accept either `hotel/search` or `hotel.search`, then normalize to package path.
+    raw = (path or "shared").strip().replace(".", "/").replace("\\", "/")
+    parts = [part.strip().replace("-", "_") for part in raw.split("/") if part.strip()]
+    if not parts:
+        parts = ["shared"]
+    return Path(*parts)
+
+
+def _ensure_package_tree(root: Path, subpath: Path) -> Path:
+    current = root
+    init_file = current / "__init__.py"
+    if not init_file.exists():
+        init_file.write_text("# Tool definitions package.\n", encoding="utf-8")
+
+    for part in subpath.parts:
+        current = current / part
+        current.mkdir(parents=True, exist_ok=True)
+        init_file = current / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text(
+                f"# Tool definitions package: {part}\n", encoding="utf-8"
+            )
+    return current
+
+
 def run_make_tool(args: argparse.Namespace) -> None:
     """Generates a new ToolSpec file and basic implementation."""
     name = args.name.lower().replace(" ", "_")
@@ -19,18 +45,31 @@ def run_make_tool(args: argparse.Namespace) -> None:
 from pydantic import BaseModel, Field
 from agentic_system.tools.tool_models import ToolSpec
 
+#================================================================
+# TOOL CONFIGURATION GUIDE
+#================================================================
+# intent:        Formal definition of what the tool does (for the LLM).
+#                Example: "Useful for searching internal flight records."
+#
+# schema_notes:  Instructional notes for the LLM on input/output logic.
+#                Example: "Always returns a list of JSON objects."
+#
+# groups:        Predefined tool sets this tool belongs to.
+#                Example: ["research", "travel", "core"]
+#================================================================
+
 class {name.title().replace('_', '')}Input(BaseModel):
     query: str = Field(description="Search or action query")
 
 def build_{name}_tool() -> StructuredTool:
-    def _{name}(query: str) -> str:
+    def run(query: str) -> str:
         # TODO: Implement tool logic
         return f"Tool {name} executed with query: {{query}}"
 
     return StructuredTool.from_function(
         name="{name}",
         description="{intent}",
-        func=_{name},
+        func=run,
         args_schema={name.title().replace('_', '')}Input,
     )
 
@@ -38,20 +77,20 @@ def build_{name}():
     return build_{name}_tool()
 
 tool = ToolSpec(
-    name="{name}",
-    builder=build_{name},
-    intent="{intent}",
-    schema_notes="{schema_notes}",
-    groups={groups_repr},
+    name         = "{name}",
+    builder      = build_{name},
+    intent       = "{intent}",
+    schema_notes = "{schema_notes}",
+    groups       = {groups_repr},
 )
 """
 
     definitions_dir = Path(__file__).parent.parent / "tools" / "definitions"
-    if not definitions_dir.exists():
-        definitions_dir.mkdir(parents=True, exist_ok=True)
-        (definitions_dir / "__init__.py").write_text("# Tool definitions package.\n")
+    definitions_dir.mkdir(parents=True, exist_ok=True)
+    target_subpath = _normalize_tool_path(args.path)
+    target_dir = _ensure_package_tree(definitions_dir, target_subpath)
 
-    tool_file = definitions_dir / f"{name}.py"
+    tool_file = target_dir / f"{name}.py"
 
     if tool_file.exists():
         print(f"Error: Tool file '{tool_file.name}' already exists.")
@@ -60,4 +99,5 @@ tool = ToolSpec(
     tool_file.write_text(file_content, encoding="utf-8")
 
     print(f"✅ Successfully created tool file: {name}.py")
+    print(f"📂 Tool path: tools/definitions/{target_subpath.as_posix()}")
     print(f"📍 Location: {tool_file}")

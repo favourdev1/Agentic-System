@@ -111,23 +111,17 @@ src/agentic_system/
 │   ├── registry.py
 │   ├── tool_models.py
 │   ├── definitions/
-│   │   ├── calculator.py
-│   │   ├── web_search.py
-│   │   ├── web_scrape.py
-│   │   └── bank_account_api.py
-│   ├── builders/
-│   │   ├── common/
-│   │   │   ├── core.py
-│   │   │   └── web.py
-│   │   └── analysis/
-│   │       └── web.py
-│   └── tool_factory/
-│       ├── core/
-│       │   └── calculator.py
-│       └── web/
-│           ├── search.py
-│           ├── scraper.py
-│           └── http_get.py
+│   │   ├── shared/
+│   │   │   └── bank_account_api.py
+│   │   ├── general/
+│   │   │   ├── calculator.py
+│   │   │   ├── web_search.py
+│   │   │   └── web_scrape.py
+│   │   ├── flight/
+│   │   ├── hotel/
+│   │   ├── event/
+│   │   └── night_life/
+│   └── ...
 └── web/
     └── index.html
 
@@ -266,8 +260,13 @@ agentic make:agent market_analyst \
   --goal "Produce risk-aware market summaries." \
   --goal "Clearly separate facts from assumptions." \
   --boundary "No legal or regulated financial advice"
-agentic make:tool fx_rates --intent "Retrieve exchange rates" --schema-notes "query:string -> json" --groups core analysis_plus_api
+agentic make:tool fx_rates \
+  --path shared \
+  --intent "Retrieve exchange rates" \
+  --schema-notes "query:string -> json" \
+  --groups core analysis_plus_api
 ```
+`make:tool` defaults to `--path shared` when omitted.
 
 ## 10. API Reference
 Base: server root (e.g. `http://127.0.0.1:8888`)
@@ -417,9 +416,7 @@ Each tool definition exports:
 - `tool = ToolSpec(...)`
 
 Tool layers:
-- `tool_factory/`: concrete tool implementations
-- `builders/`: composition/wrappers that return `StructuredTool`
-- `definitions/`: declarative registration using `ToolSpec`
+- `definitions/`: each tool file contains schema + implementation + `StructuredTool` builder + `ToolSpec`
 - `registry.py`: dynamic discovery, group resolution, and instantiation
 
 Groups are dynamic based on `ToolSpec.groups` values across discovered tools.
@@ -485,14 +482,18 @@ Option B (manual):
 ## 19. Add a New Tool
 Option A (generator):
 ```bash
-agentic make:tool weather_lookup --intent "Get weather data" --schema-notes "query:string" --groups core
+agentic make:tool weather_lookup --path shared --intent "Get weather data" --schema-notes "query:string" --groups core
+agentic make:tool hotel_search --path hotel --intent "Search hotels by city/date" --groups hotel_ops
 ```
 
 Option B (manual, recommended for production tools):
-1. Implement concrete logic in `tools/tool_factory/...`.
-2. Add builder in `tools/builders/...`.
-3. Add `tools/definitions/<name>.py` with `tool = ToolSpec(...)`.
-4. Verify with `agentic list:tools`.
+1. Add `tools/definitions/<domain>/<name>.py`.
+2. In that file, define:
+   - input schema (`BaseModel`)
+   - runtime function
+   - `StructuredTool` builder
+   - `tool = ToolSpec(...)`
+3. Verify with `agentic list:tools`.
 
 ## 20. Troubleshooting
 ### `Unknown tool group`

@@ -55,7 +55,7 @@ def main() -> None:
     )
 
     # Group: System Operations
-    server_parser = subparsers.add_parser("server", help="Start the API server")
+    server_parser = subparsers.add_parser("serve", help="Start the API server")
     server_parser.add_argument(
         "--host", default="0.0.0.0", help="Host to bind the server to"
     )
@@ -109,6 +109,18 @@ def main() -> None:
     make_agent_parser.add_argument(
         "--description", help="High-level summary for routing"
     )
+    make_tool_parser = subparsers.add_parser("make:tool", help="Generate a new tool")
+    make_tool_parser.add_argument("name", help="Name of the new tool")
+    make_tool_parser.add_argument("--intent", help="Formal intent definition")
+    make_tool_parser.add_argument("--schema-notes", help="Notes on input/output schema")
+    make_tool_parser.add_argument(
+        "--groups", nargs="+", help="Groups to assign this tool to"
+    )
+    make_tool_parser.add_argument(
+        "--path",
+        default="shared",
+        help="Subpath under tools/definitions (e.g. shared, hotel, flight).",
+    )
 
     # Legacy Shim: Map old-style flags to new subcommands for backward compatibility.
     import sys
@@ -156,7 +168,7 @@ def main() -> None:
             print(f"- {name}: {description}")
         return
 
-    if args.command == "server":
+    if args.command == "serve":
         import uvicorn
 
         print(
@@ -282,10 +294,6 @@ def main() -> None:
         return
 
     parser.print_help()
-
-
-if __name__ == "__main__":
-    main()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
+from agentic_system.tools.tool_models import ToolSpec
+
 
 class CalculatorInput(BaseModel):
     expression: str = Field(
@@ -8,13 +10,13 @@ class CalculatorInput(BaseModel):
     )
 
 
-def build_calculator_tool() -> StructuredTool:
+def build_calculator() -> StructuredTool:
     def _calculate(expression: str) -> str:
         allowed = set("0123456789+-*/(). ")
         if any(ch not in allowed for ch in expression):
             return "Invalid expression: only numbers and + - * / ( ) are allowed."
         try:
-            # Note: eval is used here with restricted globals/locals for simple math.
+            # Restricted eval for simple math expressions.
             result = eval(expression, {"__builtins__": {}}, {})
             return str(result)
         except Exception as exc:  # noqa: BLE001
@@ -26,3 +28,12 @@ def build_calculator_tool() -> StructuredTool:
         func=_calculate,
         args_schema=CalculatorInput,
     )
+
+
+tool = ToolSpec(
+    name="calculator",
+    builder=build_calculator,
+    intent="Execute mathematical computations for absolute precision.",
+    schema_notes="Expects 'expression' string. Returns numerical result.",
+    groups=["core", "analysis_plus_api"],
+)

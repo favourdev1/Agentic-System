@@ -275,7 +275,7 @@ class Orchestrator:
         ui = structured_llm.invoke(
             [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
         )
-        if ui.layout == "none" and not ui.cards and ui.table is None:
+        if ui.layout == "none" and not ui.elements:
             return None
         return ui
 

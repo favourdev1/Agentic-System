@@ -1,6 +1,7 @@
 import importlib
 import pkgutil
 from typing import Any
+
 from agentic_system.tools import definitions
 from agentic_system.tools.tool_models import ToolSpec
 
@@ -15,19 +16,24 @@ class ToolRegistry:
         if cls._cached_tools is not None:
             return cls._cached_tools
 
-        tools = {}
-        # Iterate through all modules in the 'definitions' package
-        for _, name, is_pkg in pkgutil.iter_modules(definitions.__path__):
+        tools: dict[str, ToolSpec] = {}
+        # Walk recursively so tools can be organized by domain folders.
+        for _, module_name, is_pkg in pkgutil.walk_packages(
+            definitions.__path__, prefix="agentic_system.tools.definitions."
+        ):
             if is_pkg:
                 continue
 
-            # Import the module dynamically
-            module_name = f"agentic_system.tools.definitions.{name}"
             module = importlib.import_module(module_name)
 
-            # Look for a 'tool' attribute that is a ToolSpec
+            # Look for a 'tool' attribute that is a ToolSpec.
             tool_spec = getattr(module, "tool", None)
             if isinstance(tool_spec, ToolSpec):
+                if tool_spec.name in tools:
+                    raise ValueError(
+                        f"Duplicate tool name detected: {tool_spec.name} "
+                        f"(module {module_name})"
+                    )
                 tools[tool_spec.name] = tool_spec
 
         cls._cached_tools = tools
