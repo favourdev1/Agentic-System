@@ -190,8 +190,9 @@ def main() -> None:
         groups = ToolRegistry.list_groups()
         all_tools = ToolRegistry.list_all_tools()
         print("Groups:")
-        for name, tools in groups.items():
-            print(f"- {name}: {', '.join(tools)}")
+        for name, metadata in groups.items():
+            tool_list = metadata.get("tools", [])
+            print(f"- {name}: {', '.join(tool_list)}")
         print("\nAvailable Tools:")
         for name in sorted(all_tools):
             print(f"- {name}")

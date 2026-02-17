@@ -41,9 +41,9 @@ class ToolRegistry:
         return tools
 
     @classmethod
-    def _get_dynamic_groups(cls) -> dict[str, list[str]]:
-        """Returns tool groups defined in the central groups configuration."""
-        return TOOL_GROUPS
+    def _get_dynamic_groups(cls) -> dict[str, dict[str, Any]]:
+        """Returns tool groups defined in the central groups configuration, converted to a lookup map."""
+        return {group["group_name"]: group for group in TOOL_GROUPS}
 
     @classmethod
     def resolve_tool_names(
@@ -55,7 +55,7 @@ class ToolRegistry:
             if group_name not in dynamic_groups:
                 print(f"Unknown tool group: {group_name}")
                 raise ValueError(f"Unknown tool group: {group_name}")
-            merged.extend(dynamic_groups[group_name])
+            merged.extend(dynamic_groups[group_name].get("tools", []))
         merged.extend(tool_names)
         # Keep deterministic order while de-duplicating.
         resolved = list(dict.fromkeys(merged))
@@ -93,7 +93,7 @@ class ToolRegistry:
         return f"Using {tool_name}..."
 
     @classmethod
-    def list_groups(cls) -> dict[str, list[str]]:
+    def list_groups(cls) -> dict[str, dict[str, Any]]:
         return cls._get_dynamic_groups()
 
     @classmethod
