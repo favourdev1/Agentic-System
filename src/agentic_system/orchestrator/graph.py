@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 from agentic_system.agents.registry import AgentRegistry, AgentSpec
 from agentic_system.config.settings import get_settings
 from agentic_system.orchestrator.llm_factory import LLMFactory
+from agentic_system.orchestrator.manager import AgentDelegateTool
 from agentic_system.orchestrator.state import OrchestratorState
 from agentic_system.orchestrator.ui_models import UiSpec
 from agentic_system.prompting import PromptManager
@@ -24,8 +26,8 @@ class IntentResponse(BaseModel):
 
 
 class ExecutionDecision(BaseModel):
-    mode: Literal["direct", "plan"] = Field(
-        description="Execution strategy. Use direct for single-pass tasks, plan for multi-step tasks."
+    mode: Literal["direct", "plan", "hierarchical"] = Field(
+        description="Execution strategy. Use direct for simple tasks, plan for sequential tasks, and hierarchical for multi-agent coordination."
     )
     reason: str = Field(description="Brief reason for choosing the strategy")
 
@@ -41,6 +43,13 @@ class PlanStep(BaseModel):
 class ExecutionPlan(BaseModel):
     objective: str = Field(description="Execution objective")
     steps: list[PlanStep] = Field(description="Ordered executable steps")
+
+
+class SubTaskResult(BaseModel):
+    agent_id: str
+    objective: str
+    output: str
+    depth: int
 
 
 class StreamProcessor:
@@ -141,7 +150,9 @@ class Orchestrator:
     5. Post-processing: Optionally generates UI payloads.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, recursion_depth: int = 0) -> None:
+        self._recursion_depth = recursion_depth
+        self._max_recursion_depth = 3
         self._app = self._build_graph()
         settings = get_settings()
         self._store = build_session_store()
@@ -210,12 +221,27 @@ class Orchestrator:
         )
 
         structured_llm = llm.with_structured_output(ExecutionDecision)
-        return structured_llm.invoke(
+        decision = structured_llm.invoke(
             [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=context_prompt),
             ]
         )
+
+        # Enforce global settings control
+        settings = get_settings()
+        if settings.process_mode == "sequential" and decision.mode == "hierarchical":
+            decision.mode = "plan"
+            decision.reason += (
+                " (Hierarchical mode disabled in settings; downgraded to PLAN)"
+            )
+        elif settings.process_mode == "hierarchical" and decision.mode == "plan":
+            decision.mode = "hierarchical"
+            decision.reason += (
+                " (Hierarchical mode enforced in settings; upgraded to HIERARCHICAL)"
+            )
+
+        return decision
 
     def _build_plan(
         self, user_input: str, selected_agent: str, session_context: str
@@ -462,7 +488,7 @@ class Orchestrator:
 
     @staticmethod
     def _mode_edge(state: OrchestratorState) -> str:
-        return "plan" if state.get("execution_mode") == "plan" else "direct"
+        return state["execution_mode"]
 
     @staticmethod
     def finalize_node(state: OrchestratorState) -> OrchestratorState:
@@ -482,6 +508,7 @@ class Orchestrator:
         graph.add_node("build_plan", self.plan_node)
         graph.add_node("run_direct", self.agent_node)
         graph.add_node("run_plan", self.execute_plan_node)
+        graph.add_node("run_hierarchical", self.manager_node)
         graph.add_node("finalize", self.finalize_node)
 
         graph.add_edge(START, "route")
@@ -492,13 +519,79 @@ class Orchestrator:
             {
                 "direct": "run_direct",
                 "plan": "build_plan",
+                "hierarchical": "run_hierarchical",
             },
         )
         graph.add_edge("build_plan", "run_plan")
         graph.add_edge("run_direct", "finalize")
         graph.add_edge("run_plan", "finalize")
+        graph.add_edge("run_hierarchical", "finalize")
         graph.add_edge("finalize", END)
         return graph.compile()
+
+    async def ainvoke_subtask(self, agent_id: str, objective: str) -> str:
+        """Recursive asynchronous invocation for sub-tasks."""
+        if self._recursion_depth >= self._max_recursion_depth:
+            return "Error: Maximum delegation depth reached. Prevented potential infinite loop."
+
+        # Create a sub-orchestrator with incremented depth
+        sub_orchestrator = Orchestrator(recursion_depth=self._recursion_depth + 1)
+
+        # Invoke the full pipeline for the sub-task
+        result = await sub_orchestrator.ainvoke_with_metadata(
+            objective, target_agent=agent_id
+        )
+        return result.get("response", "No response from sub-task.")
+
+    def invoke_subtask(self, agent_id: str, objective: str) -> str:
+        """Recursive synchronous invocation for sub-tasks."""
+        if self._recursion_depth >= self._max_recursion_depth:
+            return "Error: Maximum delegation depth reached. Prevented potential infinite loop."
+
+        sub_orchestrator = Orchestrator(recursion_depth=self._recursion_depth + 1)
+        result = sub_orchestrator.invoke_with_metadata(objective, target_agent=agent_id)
+        return result.get("response", "No response from sub-task.")
+
+    def manager_node(self, state: OrchestratorState) -> dict[str, Any]:
+        """Hierarchical manager node with task lifecycle management."""
+        llm = LLMFactory.create_chat_model(streaming=state.get("streaming", False))
+
+        # Build tool for delegation (True Hierarchy)
+        delegate_tool = AgentDelegateTool()
+        delegate_tool.orchestrator = self
+
+        agents = AgentRegistry.descriptions()
+        agent_list = "\n".join([f"- {name}: {desc}" for name, desc in agents.items()])
+
+        system_prompt = self._prompts.get_prompt("manager_system")
+        user_prompt = self._prompts.get_prompt(
+            "manager_user",
+            user_input=state["user_input"],
+            agent_list=agent_list,
+            session_context=state.get("session_context", "None"),
+        )
+
+        # The Manager uses the ReAct loop to delegate, evaluate, and synthesize.
+        worker = create_react_agent(llm, tools=[delegate_tool])
+
+        result = worker.invoke(
+            {
+                "messages": [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt),
+                ]
+            }
+        )
+
+        response = StreamProcessor.chunk_to_text(result["messages"][-1])
+
+        # Track subtasks in state for history/transparency
+        # We can extractToolCalls if we want to be more granular.
+        return {
+            "response": response,
+            "raw_agent_output": result,
+            "recursion_depth": self._recursion_depth,
+        }
 
     def _persist_session(
         self,
@@ -698,6 +791,77 @@ class Orchestrator:
                     user_input=user_input,
                     response_text=final_response,
                 )
+            self._persist_session(
+                session_id=sid,
+                user_input=user_input,
+                response=final_response,
+                selected_agent=selected_agent,
+                execution_mode=decision.mode,
+                route_reason=route_reason,
+                execution_reason=decision.reason,
+                prompt_version=self._prompts.get_active_version(),
+                plan_objective=None,
+                plan_steps=None,
+                step_results=None,
+            )
+
+            yield {
+                "type": "metadata",
+                "stage": "done",
+                "session_id": sid,
+                "route_reason": route_reason,
+                "agent": selected_agent,
+                "execution_mode": decision.mode,
+                "execution_reason": decision.reason,
+                "prompt_version": self._prompts.get_active_version(),
+            }
+            if ui_spec:
+                yield {"type": "ui", "payload": ui_spec.model_dump()}
+            return
+
+        elif decision.mode == "hierarchical":
+            # Hierarchical execution via Manager agent
+            delegate_tool = AgentDelegateTool()
+            delegate_tool.orchestrator = self
+
+            # Manager is always a ReAct agent with delegation tools
+            manager_worker = create_react_agent(
+                LLMFactory.create_chat_model(streaming=True), tools=[delegate_tool]
+            )
+
+            agents = AgentRegistry.descriptions()
+            agent_list = "\n".join(
+                [f"- {name}: {desc}" for name, desc in agents.items()]
+            )
+
+            system_prompt = self._prompts.get_prompt("manager_system")
+            user_prompt = self._prompts.get_prompt(
+                "manager_user",
+                user_input=user_input,
+                agent_list=agent_list,
+                session_context=session_context,
+            )
+
+            streamed_text_parts: list[str] = []
+            async for payload in self._stream_worker_events(
+                worker=manager_worker,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                trace_tools=trace_tools,
+            ):
+                if payload.get("type") == "token":
+                    streamed_text_parts.append(str(payload.get("content", "")))
+                yield payload
+
+            final_response = "".join(streamed_text_parts)
+
+            ui_spec: UiSpec | None = None
+            if generate_ui:
+                ui_spec = self._build_ui_spec(
+                    user_input=user_input,
+                    response_text=final_response,
+                )
+
             self._persist_session(
                 session_id=sid,
                 user_input=user_input,

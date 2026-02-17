@@ -147,7 +147,10 @@
 
           <!-- Events Tab -->
           <div id="panel-events" class="hidden h-full flex flex-col">
-            <div class="p-4 flex-1 overflow-auto">
+            <div class="px-4 py-2 border-b border-dark-800 flex justify-end">
+              <button id="clearLogsBtn" class="px-3 py-1 bg-dark-800 hover:bg-dark-700 rounded text-[10px] font-bold uppercase tracking-wider text-dark-400 transition-colors">Clear Logs</button>
+            </div>
+            <div class="p-4 flex-1 overflow-auto custom-scrollbar" id="eventsScroller">
               <pre id="eventsPanel" class="text-[10px] leading-relaxed font-mono text-brand-300 whitespace-pre-wrap"></pre>
             </div>
           </div>
@@ -297,10 +300,29 @@
       // Event Logic
       function appendEventLine(obj) {
         const eventsPanel = document.getElementById('eventsPanel');
-        const ts = new Date().toLocaleTimeString();
-        eventsPanel.textContent += `[${ts}] ${JSON.stringify(obj)}\n`;
-        eventsPanel.scrollTop = eventsPanel.scrollHeight;
+        const eventsScroller = document.getElementById('eventsScroller');
+        const now = new Date();
+        const ts = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+        
+        const line = document.createElement('div');
+        line.className = 'mb-1.5';
+        line.innerHTML = `<span class="text-dark-500 font-bold">[${ts}]</span> <span class="text-brand-300 transition-colors hover:text-brand-200">${JSON.stringify(obj)}</span>`;
+        eventsPanel.appendChild(line);
+        
+        // Add separator if it's the final event
+        if (obj.type === 'done' || (obj.stage === 'done' && obj.type === 'metadata')) {
+          const sep = document.createElement('div');
+          sep.className = 'py-2 text-dark-700 font-bold tracking-tighter opacity-50';
+          sep.textContent = '================================================================================';
+          eventsPanel.appendChild(sep);
+        }
+        
+        eventsScroller.scrollTop = eventsScroller.scrollHeight;
       }
+
+      document.getElementById('clearLogsBtn').addEventListener('click', () => {
+        document.getElementById('eventsPanel').textContent = '';
+      });
 
       function updateSessionId(sid) {
         document.getElementById('sessionIdInput').value = sid;

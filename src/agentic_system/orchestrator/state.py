@@ -16,3 +16,6 @@ class OrchestratorState(TypedDict, total=False):
     step_results: list[dict[str, str]]
     response: str
     raw_agent_output: Any
+    # True Hierarchical Flow fields
+    subtasks: list[dict[str, Any]]
+    recursion_depth: int

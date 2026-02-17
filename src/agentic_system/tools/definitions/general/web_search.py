@@ -57,12 +57,17 @@ def build_web_search() -> StructuredTool:
                     results.append(
                         f"Title: {title}\nURL: {link}\nDescription: {snippet}\n"
                     )
+            if response.status_code == 200:
+                # ... check results ...
                 if results:
                     return "\n---\n".join(results)
 
-            return _mock_search(query)
-        except Exception:  # noqa: BLE001
-            return _mock_search(query)
+            return (
+                "Error: External search engine (DuckDuckGo) is currently unavailable due to rate limiting or connection issues. "
+                "Please try again later or provide a specific URL to scrape if available."
+            )
+        except Exception as e:
+            return f"Search error encountered: {str(e)}"
 
     return StructuredTool.from_function(
         name="web_search",

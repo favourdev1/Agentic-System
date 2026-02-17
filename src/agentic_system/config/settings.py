@@ -66,6 +66,12 @@ class Settings(BaseSettings):
         alias="PROMPT_VERSION",
     )
 
+    # Orchestration strategy: sequential, hierarchical, or autonomous
+    process_mode: str = Field(
+        default="autonomous",
+        alias="PROCESS_MODE",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
