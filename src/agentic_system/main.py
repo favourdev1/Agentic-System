@@ -63,8 +63,9 @@ def main() -> None:
         "--port", type=int, default=8888, help="Port to run the server on"
     )
     server_parser.add_argument(
-        "--reload", action="store_true", help="Enable hot reloading"
+        "--no-reload", action="store_false", dest="reload", help="Disable hot reloading"
     )
+    server_parser.set_defaults(reload=True)
 
     list_agents_parser = subparsers.add_parser(
         "list:agents", help="List available agents"
@@ -171,17 +172,16 @@ def main() -> None:
     if args.command == "serve":
         import uvicorn
 
+        is_reload = getattr(args, "reload", True)
         print(
-            f"Starting server on {args.host}:{args.port} (reload={'on' if args.reload else 'off'})"
+            f"Starting server on {args.host}:{args.port} (reload={'on' if is_reload else 'off'})"
         )
-        if args.reload:
-            uvicorn.run(
-                "agentic_system.api:app", host=args.host, port=args.port, reload=True
-            )
-        else:
-            from agentic_system.api import app
 
-            uvicorn.run(app, host=args.host, port=args.port)
+        # We use the import string "agentic_system.api:app" because uvicorn
+        # requires it for the 'reload' feature to function correctly.
+        uvicorn.run(
+            "agentic_system.api:app", host=args.host, port=args.port, reload=is_reload
+        )
         return
 
     if args.command == "list:tools":

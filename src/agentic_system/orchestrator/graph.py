@@ -56,14 +56,6 @@ class StreamProcessor:
     def __init__(self) -> None:
         self.streamed_any = False
         self.final_output_text = ""
-        # Map internal tool IDs to human-readable status messages.
-        self._tool_map = {
-            "calculator": "Consulting the calculator...",
-            "bank_account_api": "Checking bank records...",
-            "external_search_api": "Searching external data...",
-            "web_search": "Searching Google...",
-            "web_scrape": "Reading page content...",
-        }
 
     @classmethod
     def chunk_to_text(cls, chunk: Any) -> str:
@@ -121,7 +113,7 @@ class StreamProcessor:
         # Lifecycle Phase: Tool Operations (Trace Triggers)
         if event_type == "on_tool_start":
             tool_name = event.get("name", "tool")
-            msg = self._tool_map.get(tool_name, f"Using {tool_name}...")
+            msg = ToolRegistry.get_status_message(tool_name)
             return {"type": "status", "content": msg}
 
         if event_type == "on_tool_end":

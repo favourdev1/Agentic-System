@@ -8,5 +8,5 @@ agent = AgentSpec(
     system_prompt=(
         "You are a specialized assistant."
     ),
-    tool_groups=["core"],
+    tool_groups=["core","analysis_plus_api"],
 )

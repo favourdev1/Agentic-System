@@ -75,6 +75,7 @@ def build_web_search() -> StructuredTool:
 tool = ToolSpec(
     name="web_search",
     builder=build_web_search,
-    intent="Discover relevant real-time information from the open web.",
+    intent="Discover information and URLs on the open web.",
+    status_message="Searching Google...",
     schema_notes="Takes 'query' string. Returns top-K snippets or URLs.",
 )

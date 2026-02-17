@@ -44,6 +44,7 @@ def build_web_scrape() -> StructuredTool:
 tool = ToolSpec(
     name="web_scrape",
     builder=build_web_scrape,
-    intent="Extract deep-text context from specific URLs identified during search.",
+    intent="Extract text content from a given URL.",
+    status_message="Reading page content...",
     schema_notes="Takes 'url' string. Returns clean markdown-ready text.",
 )

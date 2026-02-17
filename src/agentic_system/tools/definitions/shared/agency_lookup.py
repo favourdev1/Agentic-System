@@ -40,6 +40,7 @@ def build_agency_lookup():
 tool = ToolSpec(
     name="agency_lookup",
     builder=build_agency_lookup,
-    intent="Execute agency lookup logic.",
+    intent="Retrieve official details and metadata for specific Nigerian agencies.",
+    status_message="Consulting agency directory...",
     schema_notes="Define input/output patterns here.",
 )

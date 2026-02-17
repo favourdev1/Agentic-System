@@ -7,13 +7,13 @@ TOOL_GROUPS: Dict[str, List[str]] = {
         "web_search",
         "calculator",
         "web_scrape",
+        "youtube_search",
     ],
     "analysis_plus_api": [
         "web_search",
         "calculator",
         "web_scrape",
-        "bank_account_api",
         "agency_lookup",
-        "baby"
+
     ],
 }

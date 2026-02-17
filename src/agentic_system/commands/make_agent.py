@@ -93,5 +93,14 @@ agent = AgentSpec(
 
     agent_file.write_text(file_content, encoding="utf-8")
 
-    print(f"✅ Successfully created agent file: {name}.py")
-    print(f"📍 Location: {agent_file}")
+    # ANSI Colors
+    GREEN = "\033[92m"
+    CYAN = "\033[96m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+
+    print(f"\n{BOLD}{GREEN}✨ SUCCESS: Agent created successfully!{RESET}")
+    print(f"{CYAN}--------------------------------------------------{RESET}")
+    print(f"{BOLD}Name:{RESET}     {name}.py")
+    print(f"{BOLD}Location:{RESET} {agent_file}")
+    print(f"{CYAN}--------------------------------------------------{RESET}\n")

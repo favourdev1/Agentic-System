@@ -77,6 +77,7 @@ tool = ToolSpec(
     name         = "{name}",
     builder      = build_{name},
     intent       = "{intent}",
+    status_message="Using {name}...",
     schema_notes = "{schema_notes}",
 )
 """
@@ -94,9 +95,20 @@ tool = ToolSpec(
 
     tool_file.write_text(file_content, encoding="utf-8")
 
-    print(f"✅ Successfully created tool file: {name}.py")
-    print(f"📂 Tool path: tools/definitions/{target_subpath.as_posix()}")
-    print(f"📍 Location: {tool_file}")
+    # ANSI Colors
+    GREEN = "\033[92m"
+    CYAN = "\033[96m"
+    YELLOW = "\033[93m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+
+    print(f"\n{BOLD}{GREEN}✨ SUCCESS: Tool created successfully!{RESET}")
+    print(f"{CYAN}--------------------------------------------------{RESET}")
+    print(f"{BOLD}Name:{RESET}      {name}.py")
+    print(f"{BOLD}Namespace:{RESET} tools.definitions.{target_subpath.as_posix()}")
+    print(f"{BOLD}Location:{RESET}  {tool_file}")
+    print(f"{CYAN}--------------------------------------------------{RESET}")
+    print(f"\n{BOLD}{YELLOW}💡 NEXT STEP:{RESET}")
     print(
-        f"\n💡 NEXT STEP: Manually register '{name}' in src/agentic_system/tools/groups.py"
+        f"Manually register {BOLD}'{name}'{RESET} in {CYAN}src/agentic_system/tools/groups.py{RESET}\n"
     )

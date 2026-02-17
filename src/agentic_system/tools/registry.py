@@ -57,7 +57,15 @@ class ToolRegistry:
             merged.extend(dynamic_groups[group_name])
         merged.extend(tool_names)
         # Keep deterministic order while de-duplicating.
-        return list(dict.fromkeys(merged))
+        resolved = list(dict.fromkeys(merged))
+
+        # Strengthening validation: Check if all resolved tools exist.
+        tools_map = cls._discover_tools()
+        missing = [name for name in resolved if name not in tools_map]
+        if missing:
+            raise ValueError(f"Unknown tool(s) in groups/names: {', '.join(missing)}")
+
+        return resolved
 
     @classmethod
     def get_tools(
@@ -70,6 +78,16 @@ class ToolRegistry:
         if missing:
             raise ValueError(f"Unknown tool(s): {', '.join(missing)}")
         return [tools_map[name].builder() for name in resolved]
+
+    @classmethod
+    def get_status_message(cls, tool_name: str) -> str:
+        """Retrieves the status message for a tool, or a default fallback."""
+        tools_map = cls._discover_tools()
+        if tool_name in tools_map:
+            spec = tools_map[tool_name]
+            if spec.status_message:
+                return spec.status_message
+        return f"Using {tool_name}..."
 
     @classmethod
     def list_groups(cls) -> dict[str, list[str]]:

@@ -31,8 +31,6 @@ class Settings(BaseSettings):
 
     # API Configuration
     api_base_url: str = Field(default="", alias="API_BASE_URL")
-    bank_api_auth_token: str = Field(default="", alias="BANK_API_AUTH_TOKEN")
-    bank_api_session_cookie: str = Field(default="", alias="BANK_API_SESSION_COOKIE")
 
     # File-based session persistence
     session_store_dir: str = Field(

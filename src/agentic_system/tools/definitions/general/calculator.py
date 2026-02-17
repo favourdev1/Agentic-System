@@ -33,6 +33,7 @@ def build_calculator() -> StructuredTool:
 tool = ToolSpec(
     name="calculator",
     builder=build_calculator,
-    intent="Execute mathematical computations for absolute precision.",
+    intent="Evaluate arithmetic expressions and complex mathematical formulas.",
+    status_message="Consulting the calculator...",
     schema_notes="Expects 'expression' string. Returns numerical result.",
 )
