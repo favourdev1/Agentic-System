@@ -88,6 +88,7 @@ class AgentRegistry:
     def get_agent(cls, name: str) -> AgentSpec:
         agents = cls._discover_agents()
         if name not in agents:
+            print(f"Unknown agent: {name}")
             raise ValueError(f"Unknown agent: {name}")
         return agents[name]
 

@@ -13,7 +13,9 @@ TOOL_GROUPS: Dict[str, List[str]] = {
         "web_search",
         "calculator",
         "web_scrape",
-        "agency_lookup",
-
+    ],
+    "social": [
+        "daily_quote",
+        "youtube_search",
     ],
 }

@@ -53,6 +53,7 @@ class ToolRegistry:
         dynamic_groups = cls._get_dynamic_groups()
         for group_name in group_names:
             if group_name not in dynamic_groups:
+                print(f"Unknown tool group: {group_name}")
                 raise ValueError(f"Unknown tool group: {group_name}")
             merged.extend(dynamic_groups[group_name])
         merged.extend(tool_names)
@@ -63,6 +64,7 @@ class ToolRegistry:
         tools_map = cls._discover_tools()
         missing = [name for name in resolved if name not in tools_map]
         if missing:
+            print(f"Unknown tool(s) in groups/names: {', '.join(missing)}")
             raise ValueError(f"Unknown tool(s) in groups/names: {', '.join(missing)}")
 
         return resolved
@@ -76,6 +78,7 @@ class ToolRegistry:
         tools_map = cls._discover_tools()
         missing = [name for name in resolved if name not in tools_map]
         if missing:
+            print(f"Unknown tool(s): {', '.join(missing)}")
             raise ValueError(f"Unknown tool(s): {', '.join(missing)}")
         return [tools_map[name].builder() for name in resolved]
 
